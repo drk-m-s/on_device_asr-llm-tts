@@ -1,9 +1,12 @@
-# Real-Time Voice Conversation System (ASR + LLM + TTS) : 500ms time-to-first-token
+# Real-Time Voice Conversation System (ASR + LLM + TTS) : 
 
 This repository contains a real‑time demo of ASR + LLM + TTS built on top of `llama.cpp`:
 
-1. Voice Conversation Pipeline (ASR → LLM → TTS) with interruption & latency instrumentation
-2. Original SmolVLM real-time camera demo (vision + instruction following)
+1. ASR model is using https://github.com/KoljaB/RealtimeSTT
+2. LLM is Qwen3-0.6B, served via llama.cpp on a Windows machine and communicating with the main python code via localhost
+3. TTS model is uing Piper https://github.com/OHF-Voice/piper1-gpl
+
+This locally-running voice-chat agent can achieve ~500ms time to first token and ~15 tokens per second decoding speed for Qwen3-0.6B running on Intel Ultra5 125H with integrated GPU.
 
 ---
 ## 1. Voice Conversation System
