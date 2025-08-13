@@ -1,0 +1,48 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv*/
+.env/
+.env
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Logs & runtime output
+*.log
+realtimesst.log
+output*.wav
+# Keep test sample explicitly
+!test.wav
+
+# Cache / temp
+*.tmp
+*.cache/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models & large binaries (use Git LFS or provide download script)
+*.onnx
+*.onnx.json
+*.gguf
+
+# Audio datasets (optional large)
+recordings/
+
+# Node / frontend (if added later)
+node_modules/
+
+# Misc
+*.bak
