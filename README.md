@@ -1,6 +1,6 @@
-# Real-Time Voice Conversation System (ASR + LLM + TTS) & SmolVLM Camera Demo
+# Real-Time Voice Conversation System (ASR + LLM + TTS) : 500ms time-to-first-token
 
-This repository now contains two related real‑time demos built on top of `llama.cpp`:
+This repository contains a real‑time demo of ASR + LLM + TTS built on top of `llama.cpp`:
 
 1. Voice Conversation Pipeline (ASR → LLM → TTS) with interruption & latency instrumentation
 2. Original SmolVLM real-time camera demo (vision + instruction following)
