@@ -1,4 +1,4 @@
-# Real-Time Voice Conversation System (ASR + LLM + TTS) : 
+# Locally Running Real-Time Voice Conversation System (ASR + LLM + TTS)
 
 This repository contains a real‑time demo of ASR + LLM + TTS built on top of `llama.cpp`:
 
