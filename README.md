@@ -1,12 +1,9 @@
-# Locally Running Real-Time Voice Conversation System (ASR + LLM + TTS)
+# Real-Time Voice Conversation System (ASR + LLM + TTS) & SmolVLM Camera Demo
 
-This repository contains a real‑time demo of ASR + LLM + TTS built on top of `llama.cpp`:
+This repository now contains two related real‑time demos built on top of `llama.cpp`:
 
-1. ASR model is using https://github.com/KoljaB/RealtimeSTT
-2. LLM is Qwen3-0.6B, served via llama.cpp on a Windows machine and communicating with the main python code via localhost
-3. TTS model is uing Piper https://github.com/OHF-Voice/piper1-gpl
-
-This locally-running voice-chat agent can achieve ~500ms time to first token and ~15 tokens per second decoding speed for Qwen3-0.6B running on Intel Ultra5 125H with integrated GPU.
+1. Voice Conversation Pipeline (ASR → LLM → TTS) with interruption & latency instrumentation
+2. Original SmolVLM real-time camera demo (vision + instruction following)
 
 ---
 ## 1. Voice Conversation System
@@ -97,3 +94,49 @@ ASR callbacks (`on_recording_start/stop/transcription_start`) immediately:
 - Smarter semantic summarization using a tiny local model
 - WebSocket / browser microphone client integration
 - Automated model download / verification script
+
+---
+## 2. SmolVLM Real-Time Camera Demo (Original)
+
+![demo](./demo.png)
+
+Simple demo using `llama.cpp` multimodal support with SmolVLM 500M for real-time object / scene description.
+
+### Setup (Original Instructions)
+1. Install [llama.cpp](https://github.com/ggml-org/llama.cpp)
+2. Run:
+   ```
+   llama-server -hf ggml-org/SmolVLM-500M-Instruct-GGUF
+   ```
+   Notes:
+   - Add `-ngl 99` to enable GPU acceleration if available
+   - Explore other models in llama.cpp multimodal docs
+3. Open `index.html`
+4. Optionally change the system / task instruction
+5. Click "Start"
+
+---
+## Repository Structure (Selected)
+```
+asr_llm_tts.py        # Voice conversation main system
+llm_tts.py            # Earlier LLM→TTS prototype
+asr_test.py           # ASR experiments
+tts_test.py           # TTS experiments
+index.html            # Original camera demo UI
+config.py             # Config helpers (if used)
+README.md             # This file
+requirements.txt      # Python dependencies
+*.onnx / *.gguf       # (ignored) place your models here
+```
+
+## Large Files / Models
+Model binaries are git-ignored. Use Git LFS or a download script if distributing.
+
+## License
+See `LICENSE` (add one if missing before publishing publicly).
+
+## Disclaimer
+Ensure compliance with model & dataset licenses. Voice data may contain PII – handle responsibly.
+
+---
+Happy hacking!
