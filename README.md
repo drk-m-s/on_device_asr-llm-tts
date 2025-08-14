@@ -1,4 +1,4 @@
-# Real-Time Voice Conversation System (ASR + LLM + TTS) & SmolVLM Camera Demo
+# Real-Time Voice Conversation System (ASR + LLM + TTS) 
 
 This repository a real‑time demo built on top of `llama.cpp`:
 
