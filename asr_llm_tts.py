@@ -78,10 +78,14 @@ class VoiceConversationSystem:
         print("Loading ASR model...")
         self.asr_recorder = AudioToTextRecorder(
             enable_realtime_transcription=True,
-            silero_sensitivity=0.8,
+            silero_sensitivity=0.3,
+            silero_use_onnx = True,  # Use ONNX for faster inference
+            post_speech_silence_duration = 0.5, 
             language="en",
-            on_recording_start=self._on_recording_start,
-            on_recording_stop=self._on_recording_stop,
+            # on_recording_start=self._on_recording_start,
+            # on_recording_stop=self._on_recording_stop,
+            on_vad_start = self._on_recording_start,
+            on_vad_stop = self._on_recording_stop,
             on_transcription_start=self._on_transcription_start
         )
         print("ASR model loaded and ready")
@@ -143,8 +147,8 @@ class VoiceConversationSystem:
             "repeat_penalty": 1.05,  # Slightly lower
             "stream": True,
             "stop": ["Human:", "\n\nHuman:", "\n\n"],
-            "n_predict": 512,
-            "n_keep": 128,  # Keep last 128 tokens in memory for context
+            "n_predict": 256,
+            "n_keep": 1000,  # Keep last 1000 tokens in memory for context
             "cache_prompt": True,
             "n_threads": -1,
         }
