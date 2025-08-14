@@ -81,6 +81,8 @@ class VoiceConversationSystem:
             silero_sensitivity=0.3,
             silero_use_onnx = True,  # Use ONNX for faster inference
             post_speech_silence_duration = 0.5, 
+            # wakeword_backend = "pvporcupine",
+            # wake_words = "alexa",
             language="en",
             # on_recording_start=self._on_recording_start,
             # on_recording_stop=self._on_recording_stop,
