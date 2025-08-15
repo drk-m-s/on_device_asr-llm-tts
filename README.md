@@ -36,6 +36,18 @@ pip install -r requirements.txt
 ```
 Ensure you have:
 - `llama-server` (from llama.cpp) running locally
+  - e.g. 
+  ``` bash
+  llama-server -m Llama-3.2-3B-Instruct-IQ3_M.gguf 
+  ```
+  which can be called by
+  ```bash
+  curl http://localhost:8080/completion -d '{
+    "prompt": "Your prompt here",
+    "n_predict": 128
+  }'
+  ```
+
 - Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx`) placed in repo root (gitignored)
 
 ### Run
