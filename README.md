@@ -35,7 +35,7 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 pip install -r requirements.txt
 ```
 for macOS, 
-  - if python=3.10, please `brew install portaudio` before executing the above.
+  - if python=3.10, please `brew install portaudio` before executing the above so that `pyaudio` can be installed. However, the `pyaudio` **here** serves `REaltimeSTT`, instead of itself, that's why `sounddevice` is introduced.
 
 
 Ensure you have:
@@ -44,13 +44,18 @@ Ensure you have:
   ``` bash
   llama-server -m Llama-3.2-3B-Instruct-IQ3_M.gguf 
   ```
-  which can be called by
+  which can be verified by calling
   ```bash
   curl http://localhost:8080/completion -d '{
     "prompt": "Your prompt here",
     "n_predict": 128
   }'
   ```
+  if get results like 
+  ```bash
+  {"index":0,"content":" It's great to be here. I'm so excited ...
+  ```
+  Then it's okay.
 
 - Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx` as well as `en_US-hfc_female-medium.onnx.json`) placed in repo root (gitignored)
   - e.g. download the model from `https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium`.
@@ -65,14 +70,13 @@ Test components:
 python asr_llm_tts.py --test
 ```
 
-
 #### for macOS
 ```bash
 pip install "httpx[http2]"
 pip install sounddevice
 ```
 and run `asr_llm_tts_sounddevice.py` and `llm_tts_sounddevice.py` instead.
-make sure the numpy used is of version less than 2.0.
+make sure the `numpy` used is of version less than 2.0.
 
 
 ### llama.cpp Server Example
