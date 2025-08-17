@@ -34,6 +34,10 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 ```
 pip install -r requirements.txt
 ```
+for macOS, 
+  - if python=3.10, please `brew install portaudio` before executing the above.
+
+
 Ensure you have:
 - `llama-server` (from llama.cpp) running locally
   - e.g. 
@@ -48,9 +52,11 @@ Ensure you have:
   }'
   ```
 
-- Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx`) placed in repo root (gitignored)
+- Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx` as well as `en_US-hfc_female-medium.onnx.json`) placed in repo root (gitignored)
+  - e.g. download the model from `https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium`.
 
 ### Run
+
 ```
 python asr_llm_tts.py --llm-url http://localhost:8080 --tts-model en_US-hfc_female-medium.onnx
 ```
@@ -58,6 +64,16 @@ Test components:
 ```
 python asr_llm_tts.py --test
 ```
+
+
+#### for macOS
+```bash
+pip install "httpx[http2]"
+pip install sounddevice
+```
+and run `asr_llm_tts_sounddevice.py` and `llm_tts_sounddevice.py` instead.
+make sure the numpy used is of version less than 2.0.
+
 
 ### llama.cpp Server Example
 ```
