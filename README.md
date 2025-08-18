@@ -81,7 +81,7 @@ python asr_llm_tts.py --test
 pip install "httpx[http2]"
 pip install sounddevice
 ```
-You can run  `llm_tts.py`, but you need to run `asr_llm_tts_sounddevice.py` instead of `asr_llm_tts.py`. Make sure the `numpy` used is of version less than 2.0.
+Make sure the `numpy` used is of version less than 2.0.
 
 
 

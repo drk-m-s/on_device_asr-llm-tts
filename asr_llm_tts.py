@@ -4,17 +4,18 @@ Listens to user speech, processes it through LLM, and responds with synthesized 
 Supports interruption: user can speak while AI is talking to interrupt it.
 """
 
-import sys
 import threading
 import queue
 import time
-import os
-from pathlib import Path
 
 # Audio libraries
-import pyaudio
-import wave
-import numpy as np
+import platform
+if platform.system() != 'Darwin':
+    import pyaudio
+else:
+    ## for mac os, use sounddevice
+    import sounddevice as sd
+    import numpy as np
 
 # HTTP client for llama-server API
 import httpx  # Much faster than requests
@@ -65,10 +66,13 @@ class VoiceConversationSystem:
         self.asr_paused = False  # local pause flag (non-invasive)
         
         # Initialize audio for TTS output
-        self.audio = pyaudio.PyAudio()
+        if platform.system() != 'Darwin':
+            self.audio = pyaudio.PyAudio()
+        else:
+            self.audio_output_active = False        
         self.audio_stream = None
         self.audio_queue = queue.Queue()
-        
+
         # Initialize TTS
         print("Loading TTS model...")
         self.voice = PiperVoice.load(tts_model_path)
@@ -207,38 +211,64 @@ class VoiceConversationSystem:
         # Signal TTS interruption FIRST
         self.interrupt_tts.set()
         self.tts_playing.clear()
-        
-        # Immediately stop audio stream
-        if self.audio_stream:
-            try:
-                self.audio_stream.stop_stream()
-                print("🔇 Audio stream stopped")
-            except Exception as e:
-                print(f"Error stopping audio stream: {e}")
-        
-        # Clear the entire audio queue aggressively
-        cleared_items = 0
-        try:
-            while True:
+
+        if platform.system() != 'Darwin':
+            # Immediately stop audio stream
+            if self.audio_stream:
                 try:
-                    self.audio_queue.get_nowait()
-                    self.audio_queue.task_done()
-                    cleared_items += 1
-                except queue.Empty:
-                    break
-        except Exception as e:
-            print(f"Error clearing queue: {e}")
-        
-        if cleared_items > 0:
-            print(f"🗑️ Cleared {cleared_items} audio chunks from queue")
-        
-        # Restart audio stream for clean state
-        if self.audio_stream and self.sample_rate:
+                    self.audio_stream.stop_stream()
+                    print("🔇 Audio stream stopped")
+                except Exception as e:
+                    print(f"Error stopping audio stream: {e}")
+            
+            # Clear the entire audio queue aggressively
+            cleared_items = 0
             try:
-                self.audio_stream.start_stream()
-                print("🔊 Audio stream restarted")
+                while True:
+                    try:
+                        self.audio_queue.get_nowait()
+                        self.audio_queue.task_done()
+                        cleared_items += 1
+                    except queue.Empty:
+                        break
             except Exception as e:
-                print(f"Error restarting audio stream: {e}")
+                print(f"Error clearing queue: {e}")
+            
+            if cleared_items > 0:
+                print(f"🗑️ Cleared {cleared_items} audio chunks from queue")
+            
+            # Restart audio stream for clean state
+            if self.audio_stream and self.sample_rate:
+                try:
+                    self.audio_stream.start_stream()
+                    print("🔊 Audio stream restarted")
+                except Exception as e:
+                    print(f"Error restarting audio stream: {e}")
+        else:
+            # Stop sounddevice stream
+            if self.audio_output_active:
+                try:
+                    sd.stop()
+                    self.audio_output_active = False
+                    print("🔇 Audio output stopped")
+                except Exception as e:
+                    print(f"Error stopping audio output: {e}")
+            
+            # Clear the entire audio queue aggressively
+            cleared_items = 0
+            try:
+                while True:
+                    try:
+                        self.audio_queue.get_nowait()
+                        self.audio_queue.task_done()
+                        cleared_items += 1
+                    except queue.Empty:
+                        break
+            except Exception as e:
+                print(f"Error clearing queue: {e}")
+            
+            if cleared_items > 0:
+                print(f"🗑️ Cleared {cleared_items} audio chunks from queue")
 
     def _warm_up_connection(self):
         """Pre-establish connection to reduce first request latency."""
@@ -265,30 +295,37 @@ class VoiceConversationSystem:
                 return False
 
     def set_audio_format(self, sample_rate, sample_width, channels):
-        """Set audio format and initialize PyAudio stream."""
-        if (self.sample_rate != sample_rate or 
-            self.sample_width != sample_width or 
-            self.channels != channels):
-            
-            # Close existing stream
-            if self.audio_stream:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-            
-            # Update format
+        if platform.system() != 'Darwin':
+            """Set audio format and initialize PyAudio stream."""
+            if (self.sample_rate != sample_rate or 
+                self.sample_width != sample_width or 
+                self.channels != channels):
+                
+                # Close existing stream
+                if self.audio_stream:
+                    self.audio_stream.stop_stream()
+                    self.audio_stream.close()
+                
+                # Update format
+                self.sample_rate = sample_rate
+                self.sample_width = sample_width
+                self.channels = channels
+                
+                # Open new stream with ultra-optimized buffer
+                self.audio_stream = self.audio.open(
+                    format=self.audio.get_format_from_width(sample_width),
+                    channels=channels,
+                    rate=sample_rate,
+                    output=True,
+                    frames_per_buffer=128  # Even smaller buffer for instant interruption
+                )
+        else:
+            """Set audio format for sounddevice."""
             self.sample_rate = sample_rate
             self.sample_width = sample_width
             self.channels = channels
-            
-            # Open new stream with ultra-optimized buffer
-            self.audio_stream = self.audio.open(
-                format=self.audio.get_format_from_width(sample_width),
-                channels=channels,
-                rate=sample_rate,
-                output=True,
-                frames_per_buffer=128  # Even smaller buffer for instant interruption
-            )
-            print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
+        
+        print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
 
     def write_raw_data(self, audio_data):
         """Queue audio data for playback - with interruption check."""
@@ -297,48 +334,127 @@ class VoiceConversationSystem:
             self.audio_queue.put(audio_data)
 
     def audio_playback_worker(self):
-        """Ultra-optimized worker thread for audio playback with instant interruption support."""
-        while not self.stop_audio.is_set():
-            try:
-                # Check for interruption before getting audio data
-                if self.interrupt_tts.is_set() or self.user_speaking.is_set():
-                    # Aggressively clear any remaining audio data when interrupted
-                    cleared = 0
-                    try:
-                        while not self.audio_queue.empty():
-                            self.audio_queue.get_nowait()
-                            self.audio_queue.task_done()
-                            cleared += 1
-                    except queue.Empty:
-                        pass
-                    
-                    if cleared > 0:
-                        print(f"🗑️ Audio worker cleared {cleared} chunks")
-                    
-                    time.sleep(0.01)
-                    continue
-                
-                # Get audio data with very short timeout for responsiveness
+        if platform.system() != 'Darwin':
+            """Ultra-optimized worker thread for audio playback with instant interruption support."""
+            while not self.stop_audio.is_set():
                 try:
-                    audio_data = self.audio_queue.get(timeout=0.005)  # Even faster timeout
-                except queue.Empty:
-                    continue
-                
-                # Triple-check interruption before actually playing
-                if (not self.interrupt_tts.is_set() and 
-                    not self.user_speaking.is_set() and 
-                    self.audio_stream and 
-                    audio_data):
+                    # Check for interruption before getting audio data
+                    if self.interrupt_tts.is_set() or self.user_speaking.is_set():
+                        # Aggressively clear any remaining audio data when interrupted
+                        cleared = 0
+                        try:
+                            while not self.audio_queue.empty():
+                                self.audio_queue.get_nowait()
+                                self.audio_queue.task_done()
+                                cleared += 1
+                        except queue.Empty:
+                            pass
+                        
+                        if cleared > 0:
+                            print(f"🗑️ Audio worker cleared {cleared} chunks")
+                        
+                        time.sleep(0.01)
+                        continue
+                    
+                    # Get audio data with very short timeout for responsiveness
                     try:
-                        self.audio_stream.write(audio_data)
-                    except Exception as e:
-                        print(f"Audio write error: {e}")
-                
-                self.audio_queue.task_done()
-                
-            except Exception as e:
-                print(f"Audio playback worker error: {e}")
-                time.sleep(0.01)
+                        audio_data = self.audio_queue.get(timeout=0.005)  # Even faster timeout
+                    except queue.Empty:
+                        continue
+                    
+                    # Triple-check interruption before actually playing
+                    if (not self.interrupt_tts.is_set() and 
+                        not self.user_speaking.is_set() and 
+                        self.audio_stream and 
+                        audio_data):
+                        try:
+                            self.audio_stream.write(audio_data)
+                        except Exception as e:
+                            print(f"Audio write error: {e}")
+                    
+                    self.audio_queue.task_done()
+                    
+                except Exception as e:
+                    print(f"Audio playback worker error: {e}")
+                    time.sleep(0.01)
+        else:
+            """Ultra-optimized worker thread for audio playback with instant interruption support using sounddevice."""
+            while not self.stop_audio.is_set():
+                try:
+                    # Check for interruption before getting audio data
+                    if self.interrupt_tts.is_set() or self.user_speaking.is_set():
+                        # Aggressively clear any remaining audio data when interrupted
+                        cleared = 0
+                        try:
+                            while not self.audio_queue.empty():
+                                self.audio_queue.get_nowait()
+                                self.audio_queue.task_done()
+                                cleared += 1
+                        except queue.Empty:
+                            pass
+                        
+                        if cleared > 0:
+                            print(f"🗑️ Audio worker cleared {cleared} chunks")
+                        
+                        # Stop any active sounddevice playback
+                        if self.audio_output_active:
+                            try:
+                                sd.stop()
+                                self.audio_output_active = False
+                            except:
+                                pass
+                        
+                        time.sleep(0.01)
+                        continue
+                    
+                    # Get audio data with very short timeout for responsiveness
+                    try:
+                        audio_data = self.audio_queue.get(timeout=0.005)  # Even faster timeout
+                    except queue.Empty:
+                        continue
+                    
+                    # Triple-check interruption before actually playing
+                    if (not self.interrupt_tts.is_set() and 
+                        not self.user_speaking.is_set() and 
+                        audio_data):
+                        try:
+                            # Convert bytes to numpy array for sounddevice
+                            if self.sample_width == 2:  # 16-bit audio
+                                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                            elif self.sample_width == 4:  # 32-bit audio
+                                audio_array = np.frombuffer(audio_data, dtype=np.int32)
+                            else:  # Default to 16-bit
+                                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                            
+                            # Reshape for channels if needed
+                            if self.channels > 1:
+                                audio_array = audio_array.reshape(-1, self.channels)
+                            
+                            # Play audio chunk using sounddevice
+                            self.audio_output_active = True
+                            sd.play(audio_array, samplerate=self.sample_rate, blocking=False)
+                            
+                            # Wait for the chunk to finish or be interrupted
+                            chunk_duration = len(audio_array) / self.sample_rate
+                            sleep_time = min(chunk_duration, 0.1)  # Check for interruption frequently
+                            time.sleep(sleep_time)
+                            
+                            # Wait for playback to complete if not interrupted
+                            if not self.interrupt_tts.is_set() and not self.user_speaking.is_set():
+                                sd.wait()
+                            
+                            self.audio_output_active = False
+                            
+                        except Exception as e:
+                            print(f"Audio playback error: {e}")
+                            self.audio_output_active = False
+                    
+                    self.audio_queue.task_done()
+                    
+                except Exception as e:
+                    print(f"Audio playback worker error: {e}")
+                    time.sleep(0.01)
+
 
     def start_audio_thread(self):
         """Start the audio playback thread."""
@@ -350,6 +466,13 @@ class VoiceConversationSystem:
     def stop_audio_thread(self):
         """Stop the audio playback thread."""
         self.stop_audio.set()
+        if platform.system() == 'Darwin':
+            if self.audio_output_active:
+                try:
+                    sd.stop()
+                    self.audio_output_active = False
+                except:
+                    pass
         if self.audio_thread and self.audio_thread.is_alive():
             self.audio_thread.join(timeout=0.1)
 
@@ -782,11 +905,19 @@ class VoiceConversationSystem:
         self.conversation_active = False
         self.interrupt_tts.set()  # Stop any ongoing TTS
         self.stop_audio_thread()
-        if self.audio_stream:
-            self.audio_stream.stop_stream()
-            self.audio_stream.close()
-        if self.audio:
-            self.audio.terminate()
+        if platform.system() != 'Darwin':
+            if self.audio_stream:
+                self.audio_stream.stop_stream()
+                self.audio_stream.close()
+            if self.audio:
+                self.audio.terminate()
+        else:
+            # Stop sounddevice
+            try:
+                sd.stop()
+            except:
+                pass
+        
         if hasattr(self, 'session'):
             self.session.close()
         if hasattr(self, 'tts_executor'):
