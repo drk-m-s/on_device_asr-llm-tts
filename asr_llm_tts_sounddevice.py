@@ -4,16 +4,13 @@ Listens to user speech, processes it through LLM, and responds with synthesized 
 Supports interruption: user can speak while AI is talking to interrupt it.
 """
 
-import sys
 import threading
 import queue
 import time
-import os
 from pathlib import Path
 
 # Audio libraries
 import sounddevice as sd
-import wave
 import numpy as np
 
 # HTTP client for llama-server API
@@ -88,7 +85,7 @@ class VoiceConversationSystem:
             # on_recording_stop=self._on_recording_stop,
             on_vad_start = self._on_recording_start,
             on_vad_stop = self._on_recording_stop,
-            on_transcription_start=self._on_transcription_start
+            on_transcription_start=self._on_transcription_start,
         )
         print("ASR model loaded and ready")
         

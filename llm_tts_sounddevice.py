@@ -3,13 +3,10 @@ Local LLM to TTS to Speaker Demo
 Streams LLM output through TTS model to computer speakers with low latency.
 """
 
-import sys
 import threading
 import queue
 import time
-import os
 from pathlib import Path
-import socket
 
 # Audio libraries
 import sounddevice as sd
@@ -19,7 +16,6 @@ import numpy as np
 import httpx  # Much faster than requests
 import json
 from concurrent.futures import ThreadPoolExecutor
-import asyncio
 
 # TTS library
 from piper import PiperVoice
