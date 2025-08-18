@@ -34,13 +34,19 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 ```
 pip install -r requirements.txt
 ```
-for macOS, 
-  - if python=3.10, please `brew install portaudio` before executing the above so that `pyaudio` can be installed. However, the `pyaudio` **here** serves `REaltimeSTT`, instead of itself, that's why `sounddevice` is introduced.
+  - for macOS, if python==3.10, please `brew install portaudio` before executing the above so that `pyaudio` can be installed. However, the `pyaudio` **here** serves `RealtimeSTT`, instead of itself, that's why `sounddevice` is introduced.
 
 
 Ensure you have:
 - `llama-server` (from llama.cpp) running locally
-  - e.g. 
+  - e.g. 1
+    ```bash
+    ./llama-server --model ./models/your-model.Q4_K_M.gguf --host 0.0.0.0 --port 8080 \
+      --ctx-size 4096 --parallel 2 --no-mmap
+    ```
+    Tune args for your hardware (quant, threads, ctx-size). For fastest first token, prefer smaller / quantized model.
+
+  - e.g. 2
   ``` bash
   llama-server -m Llama-3.2-3B-Instruct-IQ3_M.gguf 
   ```
@@ -70,21 +76,14 @@ Test components:
 python asr_llm_tts.py --test
 ```
 
-#### for macOS
+- for macOS --
 ```bash
 pip install "httpx[http2]"
 pip install sounddevice
 ```
-and run `asr_llm_tts_sounddevice.py` and `llm_tts_sounddevice.py` instead.
-make sure the `numpy` used is of version less than 2.0.
+You can run  `llm_tts.py`, but you need to run `asr_llm_tts_sounddevice.py` instead of `asr_llm_tts.py`. Make sure the `numpy` used is of version less than 2.0.
 
 
-### llama.cpp Server Example
-```
-./llama-server --model ./models/your-model.Q4_K_M.gguf --host 0.0.0.0 --port 8080 \
-  --ctx-size 4096 --parallel 2 --no-mmap
-```
-Tune args for your hardware (quant, threads, ctx-size). For fastest first token, prefer smaller / quantized model.
 
 ### Latency Metrics Printed
 ```

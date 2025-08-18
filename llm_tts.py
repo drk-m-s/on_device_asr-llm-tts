@@ -8,8 +8,13 @@ import queue
 import time
 
 # Audio libraries
-import pyaudio
-
+import platform
+if platform.system() != 'Darwin':
+    import pyaudio
+else:
+    ## for mac os, use sounddevice
+    import sounddevice as sd
+    import numpy as np
 
 # HTTP client for llama-server API
 import httpx  # Much faster than requests
@@ -35,7 +40,8 @@ class LLMTTSStreamer:
         self.llm_server_url = llm_server_url.rstrip('/')
         
         # Initialize audio
-        self.audio = pyaudio.PyAudio()
+        if platform.system() != 'Darwin':
+            self.audio = pyaudio.PyAudio()
         self.audio_stream = None
         self.audio_queue = queue.Queue()
         
@@ -121,30 +127,56 @@ class LLMTTSStreamer:
                 return False
 
     def set_audio_format(self, sample_rate, sample_width, channels):
-        """Set audio format and initialize PyAudio stream."""
-        if (self.sample_rate != sample_rate or 
-            self.sample_width != sample_width or 
-            self.channels != channels):
-            
-            # Close existing stream
-            if self.audio_stream:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-            
-            # Update format
-            self.sample_rate = sample_rate
-            self.sample_width = sample_width
-            self.channels = channels
-            
-            # Open new stream with ultra-optimized buffer
-            self.audio_stream = self.audio.open(
-                format=self.audio.get_format_from_width(sample_width),
-                channels=channels,
-                rate=sample_rate,
-                output=True,
-                frames_per_buffer=256  # Even smaller buffer for ultra-low latency
-            )
-            print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
+        if platform.system() != 'Darwin':
+            """Set audio format and initialize PyAudio stream."""
+            if (self.sample_rate != sample_rate or 
+                self.sample_width != sample_width or 
+                self.channels != channels):
+                
+                # Close existing stream
+                if self.audio_stream:
+                    self.audio_stream.stop_stream()
+                    self.audio_stream.close()
+                
+                # Update format
+                self.sample_rate = sample_rate
+                self.sample_width = sample_width
+                self.channels = channels
+                
+                # Open new stream with ultra-optimized buffer
+                self.audio_stream = self.audio.open(
+                    format=self.audio.get_format_from_width(sample_width),
+                    channels=channels,
+                    rate=sample_rate,
+                    output=True,
+                    frames_per_buffer=256  # Even smaller buffer for ultra-low latency
+                )
+                print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
+        else:
+            """Set audio format and initialize sounddevice stream."""
+            if (self.sample_rate != sample_rate or 
+                self.sample_width != sample_width or 
+                self.channels != channels):
+                
+                # Close existing stream
+                if self.audio_stream:
+                    self.audio_stream.close()
+                
+                # Update format
+                self.sample_rate = sample_rate
+                self.sample_width = sample_width
+                self.channels = channels
+                
+                # Open new stream with low latency
+                self.audio_stream = sd.OutputStream(
+                    samplerate=sample_rate,
+                    channels=channels,
+                    dtype='int16',
+                    blocksize=256,
+                    latency='low'
+                )
+                self.audio_stream.start()
+                print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
 
     def write_raw_data(self, audio_data):
         """Queue audio data for playback."""
@@ -156,7 +188,12 @@ class LLMTTSStreamer:
             try:
                 audio_data = self.audio_queue.get(timeout=0.01)  # Ultra-fast timeout
                 if self.audio_stream and audio_data:
-                    self.audio_stream.write(audio_data)
+                    if platform.system() != 'Darwin':
+                        self.audio_stream.write(audio_data)
+                    else:
+                        # Convert raw bytes → numpy array
+                        audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                        self.audio_stream.write(audio_array)
                 self.audio_queue.task_done()
             except queue.Empty:
                 continue
@@ -225,7 +262,7 @@ class LLMTTSStreamer:
         try:
             # Use raw bytes processing for maximum speed
             with self.session.stream("POST", self.completion_url, json=payload) as response:
-                
+
                 if response.status_code != 200:
                     print(f"Error from LLM server: {response.status_code}")
                     return ""
@@ -327,7 +364,6 @@ class LLMTTSStreamer:
         while True:
             try:
                 user_input = input("\nYou: ").strip()
-                
                 if user_input.lower() in ['quit', 'exit', 'q']:
                     break
                 elif user_input.lower() == 'clear':
@@ -377,17 +413,27 @@ class LLMTTSStreamer:
             time.sleep(0.1)
 
     def cleanup(self):
-        """Clean up resources."""
-        self.stop_audio_thread()
-        if self.audio_stream:
-            self.audio_stream.stop_stream()
-            self.audio_stream.close()
-        if self.audio:
-            self.audio.terminate()
-        if hasattr(self, 'session'):
-            self.session.close()
-        if hasattr(self, 'tts_executor'):
-            self.tts_executor.shutdown(wait=False)
+        if platform.system() != 'Darwin':
+            """Clean up resources."""
+            self.stop_audio_thread()
+            if self.audio_stream:
+                self.audio_stream.stop_stream()
+                self.audio_stream.close()
+            if self.audio:
+                self.audio.terminate()
+            if hasattr(self, 'session'):
+                self.session.close()
+            if hasattr(self, 'tts_executor'):
+                self.tts_executor.shutdown(wait=False)
+        else:
+            """Clean up resources."""
+            self.stop_audio_thread()
+            if self.audio_stream:
+                self.audio_stream.close()
+            if hasattr(self, 'session'):
+                self.session.close()
+            if hasattr(self, 'tts_executor'):
+                self.tts_executor.shutdown(wait=False)
 
 
 def main():
