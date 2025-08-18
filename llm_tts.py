@@ -3,26 +3,22 @@ Local LLM to TTS to Speaker Demo
 Streams LLM output through TTS model to computer speakers with low latency.
 """
 
-import sys
 import threading
 import queue
 import time
-import os
-from pathlib import Path
-import socket
 
 # Audio libraries
 import pyaudio
-import wave
+
 
 # HTTP client for llama-server API
 import httpx  # Much faster than requests
 import json
 from concurrent.futures import ThreadPoolExecutor
-import asyncio
 
 # TTS library
 from piper import PiperVoice
+
 
 class LLMTTSStreamer:
     def __init__(self, llm_server_url=None, tts_model_path=None):
@@ -108,12 +104,11 @@ class LLMTTSStreamer:
             self.session.get(f"{self.llm_server_url}/health", timeout=1.0)
             print("Connection warmed up successfully")
         except:
-            pass  # Ignore warmup failures
+            pass
 
     def _test_llm_server(self):
         """Test if the LLM server is accessible with optimized connection."""
         try:
-            # Use httpx for testing too
             with httpx.Client(timeout=1.0) as client:
                 response = client.get(f"{self.llm_server_url}/health")
                 return response.status_code == 200
@@ -186,18 +181,14 @@ class LLMTTSStreamer:
         if not text.strip():
             return
         
-        # Start audio thread if not running
         self.start_audio_thread()
         
-        # Stream TTS synthesis
         for chunk in self.voice.synthesize(text):
-            # Set audio format on first chunk
             self.set_audio_format(
                 chunk.sample_rate, 
                 chunk.sample_width, 
                 chunk.sample_channels
             )
-            # Queue audio data for playback
             self.write_raw_data(chunk.audio_int16_bytes)
 
     def stream_tts(self, text):
@@ -206,19 +197,15 @@ class LLMTTSStreamer:
             self.tts_executor.submit(self.stream_tts_async, text)
 
     def stream_llm_response_ultra_optimized(self, prompt, max_tokens=512):
-        """
-        Ultra-optimized LLM response streaming with absolute minimal overhead.
-        """
+        """Ultra-optimized LLM response streaming."""
         if not self.llm_available:
             print("LLM server not available!")
             return ""
         
-        # Start timing IMMEDIATELY before any processing
         start_time = time.perf_counter()
         first_token_time = None
         token_count = 0
         
-        # Pre-build payload with minimal operations
         payload = {
             "prompt": prompt,
             "max_tokens": max_tokens,
@@ -232,7 +219,6 @@ class LLMTTSStreamer:
         response_text = ""
         text_buffer = ""
         
-        # Pre-compile regex patterns and constants for maximum speed
         data_prefix = 'data: '
         done_marker = '[DONE]'
         
@@ -249,29 +235,29 @@ class LLMTTSStreamer:
                 for chunk in response.iter_bytes(chunk_size=4096):  # Larger chunks for efficiency
                     if not chunk:
                         continue
-                    
+
                     buffer += chunk
                     
                     # Process complete lines only
                     while b'\n' in buffer:
                         line_bytes, buffer = buffer.split(b'\n', 1)
-                        
+
                         try:
                             line = line_bytes.decode('utf-8', errors='ignore').strip()
                         except:
                             continue
-                            
+
                         if not line.startswith(data_prefix):
                             continue
-                            
+
                         data_str = line[6:]  # Remove 'data: ' prefix
                         if data_str == done_marker:
                             break
-                        
+
                         try:
                             # Ultra-fast JSON parsing with minimal error checking
                             data = json.loads(data_str)
-                            
+
                             # Extract token with absolute minimal checks
                             token = None
                             if 'content' in data:
@@ -282,7 +268,7 @@ class LLMTTSStreamer:
                                     token = choice['text']
                                 elif 'delta' in choice and choice['delta'] and 'content' in choice['delta']:
                                     token = choice['delta']['content']
-                            
+
                             if not token:
                                 continue
                             
@@ -292,7 +278,7 @@ class LLMTTSStreamer:
                                 latency_ms = (first_token_time - start_time) * 1000
                                 print(f"\n[TIMING] First token latency: {latency_ms:.1f}ms")
                                 print("LLM Response: ", end="", flush=True)
-                            
+
                             print(token, end="", flush=True)
                             response_text += token
                             text_buffer += token
@@ -304,7 +290,7 @@ class LLMTTSStreamer:
                                 # Submit to TTS immediately without blocking
                                 self.tts_executor.submit(self.stream_tts_async, text_buffer.strip())
                                 text_buffer = ""
-                                
+
                         except json.JSONDecodeError:
                             continue
             
@@ -321,7 +307,7 @@ class LLMTTSStreamer:
                 print(f"[TIMING] Tokens per second: {tokens_per_second:.1f}")
             
             return response_text
-            
+
         except Exception as e:
             print(f"Error connecting to LLM server: {e}")
             return ""
@@ -350,19 +336,12 @@ class LLMTTSStreamer:
                     continue
                 elif not user_input:
                     continue
-                
-                # Build prompt efficiently
                 if conversation_history:
                     prompt = "\n".join(conversation_history) + f"\nHuman: {user_input}\nAssistant:"
                 else:
                     prompt = f"Human: {user_input}\nAssistant:"
-                
                 print("Assistant: ", end="", flush=True)
-                
-                # Use ultra-optimized method
                 response_text = self.stream_llm_response_ultra_optimized(prompt)
-                
-                # Update conversation history
                 if response_text:
                     conversation_history.append(f"Human: {user_input}")
                     conversation_history.append(f"Assistant: {response_text}")
@@ -370,7 +349,7 @@ class LLMTTSStreamer:
                     # Keep only last 6 exchanges
                     if len(conversation_history) > 12:
                         conversation_history = conversation_history[-12:]
-                        
+
             except KeyboardInterrupt:
                 print("\nChat interrupted.")
                 break
@@ -382,7 +361,7 @@ class LLMTTSStreamer:
         if not self.llm_available:
             print("LLM server not available!")
             return
-        
+
         test_prompt = "Hello, how are you?"
         print(f"Testing LLM with: {test_prompt}")
         self.stream_llm_response_ultra_optimized(test_prompt, max_tokens=50)
@@ -414,43 +393,34 @@ class LLMTTSStreamer:
 def main():
     """Main function to run the demo."""
     import argparse
-    
     parser = argparse.ArgumentParser(description="Local LLM to TTS Streamer")
-    parser.add_argument("--llm-url", type=str, default="http://localhost:8080", 
-                       help="URL of the llama-server (default: http://localhost:8080)")
-    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx", 
-                       help="Path to Piper TTS model")
+    parser.add_argument("--llm-url", type=str, default="http://localhost:8080", help="URL of the llama-server (default: http://localhost:8080)")
+    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     parser.add_argument("--test-llm", action="store_true", help="Test LLM connection only")
     parser.add_argument("--test-all", action="store_true", help="Test both LLM and TTS")
     parser.add_argument("--text", type=str, help="Text to synthesize (for TTS test)")
-    
     args = parser.parse_args()
-    
-    # Initialize streamer
+
     try:
         streamer = LLMTTSStreamer(
             llm_server_url=args.llm_url,
             tts_model_path=args.tts_model
         )
-        
-        if args.test_tts:
-            # Test TTS only
+
+        if args.test_tts: # Test TTS only
             test_text = args.text or "Hello! This is a test of the local text-to-speech system. It should stream audio directly to your speakers with low latency."
             streamer.test_tts_only(test_text)
-        elif args.test_llm:
-            # Test LLM only
+        elif args.test_llm: # Test LLM only
             streamer.test_llm_connection()
-        elif args.test_all:
-            # Test both
+        elif args.test_all: # Test both
             print("=== Testing LLM Connection ===")
             streamer.test_llm_connection()
             print("\n=== Testing TTS ===")
             streamer.test_tts_only("This is a test of the complete LLM to TTS pipeline!")
-        else:
-            # Start chat loop
+        else: # Start chat loop
             streamer.chat_loop()
-            
+
     except KeyboardInterrupt:
         print("\nShutting down...")
     except Exception as e:
@@ -462,5 +432,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
