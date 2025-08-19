@@ -5,30 +5,23 @@ Supports interruption: user can speak while AI is talking to interrupt it.
 """
 
 import threading
-import queue
 import time
+import json
+import hashlib
+import queue
 
-# Audio libraries
+# Import only what's not already in parent class
 import platform
-if platform.system() != 'Darwin':
-    import pyaudio
-else:
-    ## for mac os, use sounddevice
+if platform.system() == 'Darwin':
     import sounddevice as sd
     import numpy as np
-
-# HTTP client for llama-server API
-import httpx  # Much faster than requests
-import json
-from concurrent.futures import ThreadPoolExecutor
-
-# TTS library
-from piper import PiperVoice
 
 # ASR library
 from RealtimeSTT import AudioToTextRecorder
 
-class VoiceConversationSystem:
+from llm_tts import LLMTTSStreamer
+
+class VoiceConversationSystem(LLMTTSStreamer):
     def __init__(self, llm_server_url=None, tts_model_path=None,
                  use_http2=True,
                  use_raw_stream=True,
@@ -40,22 +33,16 @@ class VoiceConversationSystem:
         """
         Initialize the complete voice conversation system with ultra-optimizations.
         Added client-side optimization toggles:
-          use_http2: enable/disable HTTP/2 (can disable if adds latency)
+          use_http2: enable/disable HTTP/2 (can disable if adds latency)  
           use_raw_stream: use raw byte parser instead of iter_lines for earlier token flush
           pause_asr_during_prefill: temporarily pause ASR polling while waiting first token
           low_latency_mode: strip advanced sampling (mirostat/typical_p) to speed first token
           enable_history_summarization: summarize older turns to shrink prompt
         """
-        # Default paths
-        if tts_model_path is None:
-            tts_model_path = "en_US-hfc_female-medium.onnx"
+        # Initialize parent class first
+        super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path)
         
-        if llm_server_url is None:
-            llm_server_url = "http://localhost:8080"
-        
-        self.llm_server_url = llm_server_url.rstrip('/')
-        
-        # Optimization toggles
+        # ASR-specific optimization toggles
         self.use_http2 = use_http2
         self.use_raw_stream = use_raw_stream
         self.pause_asr_during_prefill = pause_asr_during_prefill
@@ -64,19 +51,6 @@ class VoiceConversationSystem:
         self.summarize_after_turns = summarize_after_turns
         self.history_trim_threshold = history_trim_threshold
         self.asr_paused = False  # local pause flag (non-invasive)
-        
-        # Initialize audio for TTS output
-        if platform.system() != 'Darwin':
-            self.audio = pyaudio.PyAudio()
-        else:
-            self.audio_output_active = False        
-        self.audio_stream = None
-        self.audio_queue = queue.Queue()
-
-        # Initialize TTS
-        print("Loading TTS model...")
-        self.voice = PiperVoice.load(tts_model_path)
-        print(f"TTS model loaded: {tts_model_path}")
         
         # Initialize ASR with proper callback handling
         print("Loading ASR model...")
@@ -96,17 +70,7 @@ class VoiceConversationSystem:
         )
         print("ASR model loaded and ready")
         
-        # Test LLM server connection
-        self.llm_available = self._test_llm_server()
-        if self.llm_available:
-            print(f"LLM server connected: {self.llm_server_url}")
-        else:
-            print(f"Warning: Could not connect to LLM server at {self.llm_server_url}")
-            print("Make sure llama-server is running with: llama-server --host 0.0.0.0 --port 8080")
-        
-        # Threading control
-        self.stop_audio = threading.Event()
-        self.audio_thread = None
+        # ASR-specific conversation control
         self.conversation_active = False
         
         # TTS interruption control - ENHANCED FOR IMMEDIATE INTERRUPTION
@@ -115,50 +79,10 @@ class VoiceConversationSystem:
         self.user_speaking = threading.Event()  # Flag to track if user is speaking
         self.ai_should_be_quiet = threading.Event()  # Flag to prevent AI from speaking during user input
         
-        # Audio format (will be set when TTS starts)
-        self.sample_rate = None
-        self.sample_width = None
-        self.channels = None
-        
-        # Conversation history
+        # Conversation history - separate from parent for ASR features
         self.conversation_history = []
         
-        # ULTRA-OPTIMIZED HTTP SESSION WITH CONNECTION POOLING
-        self.session = httpx.Client(
-            timeout=httpx.Timeout(
-                connect=0.2,    # Even faster connection
-                read=30.0,      
-                write=0.5,      # Faster write timeout
-                pool=0.2        # Faster pool timeout
-            ),
-            limits=httpx.Limits(
-                max_keepalive_connections=50,  # More connections
-                max_connections=100,
-                keepalive_expiry=7200  # Keep alive longer
-            ),
-            http2=self.use_http2,
-            verify=False,
-            # ADD: Connection pooling optimization
-            transport=httpx.HTTPTransport(
-                retries=0,  # No retries for speed
-                verify=False
-            )
-        )
-        
-        # Pre-compile everything possible
-        self.completion_url = f"{self.llm_server_url}/completion"
-        self.base_payload = {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "repeat_penalty": 1.05,  # Slightly lower
-            "stream": True,
-            "stop": ["Human:", "\n\nHuman:", "\n\n"],
-            "n_predict": 256,
-            "n_keep": 1000,  # Keep last 1000 tokens in memory for context
-            "cache_prompt": True,
-            "n_threads": -1,
-        }
-        # Advanced sampling only if NOT in low-latency mode
+        # Override base payload for ASR optimizations
         if not self.low_latency_mode:
             self.base_payload.update({
                 "typical_p": 0.95,
@@ -167,14 +91,9 @@ class VoiceConversationSystem:
                 "mirostat_eta": 0.1,
             })
         
-        # Pre-compile sentence endings for faster checking
-        self.sentence_endings = {'.', '!', '?', '\n'}
-        
-        # TTS thread pool for parallel processing
-        self.tts_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="TTS")
-        
-        # WARM UP CONNECTION - Pre-establish connection to reduce first request latency
-        self._warm_up_connection()
+        # Add macOS audio support flag
+        if platform.system() == 'Darwin':
+            self.audio_output_active = False
 
     def _on_recording_start(self, *args, **kwargs):
         """Callback when user starts speaking - interrupt TTS immediately."""
@@ -270,29 +189,7 @@ class VoiceConversationSystem:
             if cleared_items > 0:
                 print(f"🗑️ Cleared {cleared_items} audio chunks from queue")
 
-    def _warm_up_connection(self):
-        """Pre-establish connection to reduce first request latency."""
-        try:
-            # Make a quick health check to establish connection
-            self.session.get(f"{self.llm_server_url}/health", timeout=1.0)
-            print("Connection warmed up successfully")
-        except:
-            pass  # Ignore warmup failures
 
-    def _test_llm_server(self):
-        """Test if the LLM server is accessible with optimized connection."""
-        try:
-            # Use httpx for testing too
-            with httpx.Client(timeout=1.0) as client:
-                response = client.get(f"{self.llm_server_url}/health")
-                return response.status_code == 200
-        except:
-            try:
-                with httpx.Client(timeout=1.0) as client:
-                    response = client.get(f"{self.llm_server_url}/v1/models")
-                    return response.status_code == 200
-            except:
-                return False
 
     def set_audio_format(self, sample_rate, sample_width, channels):
         if platform.system() != 'Darwin':
@@ -331,7 +228,7 @@ class VoiceConversationSystem:
         """Queue audio data for playback - with interruption check."""
         # Double check interruption before queuing
         if not self.interrupt_tts.is_set() and not self.user_speaking.is_set():
-            self.audio_queue.put(audio_data)
+            super().write_raw_data(audio_data)
 
     def audio_playback_worker(self):
         if platform.system() != 'Darwin':
@@ -479,9 +376,7 @@ class VoiceConversationSystem:
     def stream_tts_async(self, text):
         """
         Asynchronous TTS processing with enhanced interruption support.
-        
-        Args:
-            text: Text to synthesize
+        Extends parent implementation with ASR-specific interruption handling.
         """
         if not text.strip():
             return
@@ -497,11 +392,10 @@ class VoiceConversationSystem:
         self.interrupt_tts.clear()
         self.tts_playing.set()
         
-        # Start audio thread if not running
-        self.start_audio_thread()
-        
         try:
-            # Stream TTS synthesis with frequent interruption checks
+            # Override parent's synthesis to add interruption checks
+            self.start_audio_thread()
+            
             chunk_count = 0
             for chunk in self.voice.synthesize(text):
                 chunk_count += 1
@@ -511,36 +405,34 @@ class VoiceConversationSystem:
                     print(f"🔇 TTS interrupted at chunk {chunk_count}")
                     break
                 
-                # Set audio format on first chunk
-                if chunk_count == 1:
-                    self.set_audio_format(
-                        chunk.sample_rate, 
-                        chunk.sample_width, 
-                        chunk.sample_channels
-                    )
+                # Use parent's audio format setting
+                self.set_audio_format(
+                    chunk.sample_rate, 
+                    chunk.sample_width, 
+                    chunk.sample_channels
+                )
                 
-                # Queue audio data for playback (will be checked for interruption)
+                # Use parent's audio writing method
                 self.write_raw_data(chunk.audio_int16_bytes)
                 
-                # More frequent interruption checks during synthesis
-                if chunk_count % 5 == 0:  # Check every 5 chunks
+                # Frequent interruption checks during synthesis
+                if chunk_count % 5 == 0:
                     if self.interrupt_tts.is_set() or self.user_speaking.is_set():
                         print(f"🔇 TTS interrupted during synthesis at chunk {chunk_count}")
                         break
                 
-                # Very small delay to allow interruption detection
-                time.sleep(0.0005)
+                time.sleep(0.0005)  # Allow interruption detection
                 
         except Exception as e:
             print(f"TTS error: {e}")
         finally:
-            # Clear TTS playing flag
             self.tts_playing.clear()
             print("🔊 TTS synthesis completed")
 
     def stream_tts(self, text):
-        """Submit TTS task to thread pool for parallel processing."""
+        """Submit TTS task to thread pool for parallel processing with ASR guards."""
         if text.strip() and not self.user_speaking.is_set() and not self.ai_should_be_quiet.is_set():
+            # Reuse parent's thread pool and our overridden async method
             self.tts_executor.submit(self.stream_tts_async, text)
 
     def _pause_asr(self):
@@ -901,27 +793,13 @@ class VoiceConversationSystem:
         print("✅ Component testing complete!")
 
     def cleanup(self):
-        """Clean up resources."""
+        """Clean up resources including ASR-specific ones."""
+        # ASR-specific cleanup
         self.conversation_active = False
         self.interrupt_tts.set()  # Stop any ongoing TTS
-        self.stop_audio_thread()
-        if platform.system() != 'Darwin':
-            if self.audio_stream:
-                self.audio_stream.stop_stream()
-                self.audio_stream.close()
-            if self.audio:
-                self.audio.terminate()
-        else:
-            # Stop sounddevice
-            try:
-                sd.stop()
-            except:
-                pass
         
-        if hasattr(self, 'session'):
-            self.session.close()
-        if hasattr(self, 'tts_executor'):
-            self.tts_executor.shutdown(wait=False)
+        # Call parent cleanup for common resources
+        super().cleanup()
 
 
 def main():
