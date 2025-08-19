@@ -23,6 +23,7 @@ from llm_tts import LLMTTSStreamer
 
 class VoiceConversationSystem(LLMTTSStreamer):
     def __init__(self, llm_server_url=None, tts_model_path=None,
+                 asr_model="tiny",  # Can be model size or path to local model
                  use_http2=True,
                  use_raw_stream=True,
                  pause_asr_during_prefill=True,
@@ -32,7 +33,11 @@ class VoiceConversationSystem(LLMTTSStreamer):
                  history_trim_threshold=12):
         """
         Initialize the complete voice conversation system with ultra-optimizations.
-        Added client-side optimization toggles:
+        
+        Args:
+          llm_server_url: URL of the LLM server (default: http://localhost:8080)
+          tts_model_path: Path to the TTS model file
+          asr_model: ASR model size ('tiny', 'base', 'small', 'medium', 'large') or path to local model
           use_http2: enable/disable HTTP/2 (can disable if adds latency)  
           use_raw_stream: use raw byte parser instead of iter_lines for earlier token flush
           pause_asr_during_prefill: temporarily pause ASR polling while waiting first token
@@ -53,8 +58,9 @@ class VoiceConversationSystem(LLMTTSStreamer):
         self.asr_paused = False  # local pause flag (non-invasive)
         
         # Initialize ASR with proper callback handling
-        print("Loading ASR model...")
+        print(f"Loading ASR model: {asr_model}")
         self.asr_recorder = AudioToTextRecorder(
+            model=asr_model,  # Use configurable model (size or local path)
             enable_realtime_transcription=True,
             silero_sensitivity=0.3,
             silero_use_onnx = True,  # Use ONNX for faster inference
@@ -811,6 +817,8 @@ def main():
                        help="URL of the llama-server (default: http://localhost:8080)")
     parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx", 
                        help="Path to Piper TTS model")
+    parser.add_argument("--asr-model", type=str, default="tiny", 
+                       help="ASR model size (tiny, base, small, medium, large) or path to local model file")
     parser.add_argument("--test", action="store_true", help="Test all components")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     
@@ -820,7 +828,8 @@ def main():
     try:
         system = VoiceConversationSystem(
             llm_server_url=args.llm_url,
-            tts_model_path=args.tts_model
+            tts_model_path=args.tts_model,
+            asr_model=args.asr_model
         )
         
         if args.test_tts:
