@@ -30,6 +30,14 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 ### Key File
 `asr_llm_tts.py` – class `VoiceConversationSystem`
 
+### llm models 
+- Llama-3.2-3B-Instruct-IQ3_M.gguf
+- llama_3_Base_adult.Q2_K.gguf
+- gemma-3-270m-it-F16.gguf
+- LFM2-1.2B-F16.gguf
+
+
+
 ### Installation
 ```
 pip install -r requirements.txt
@@ -126,4 +134,12 @@ ASR callbacks (`on_recording_start/stop/transcription_start`) immediately:
 - Automated model download / verification script
 
 ---
+
+FOCUSES
+1. 停止自我循环chat; 
+2. better vocabulary; 
+3. voice style;  
+4. latency; 
+5. speaking style
+
 

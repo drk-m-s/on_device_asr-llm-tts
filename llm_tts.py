@@ -42,8 +42,14 @@ class LLMTTSStreamer:
         # Initialize audio
         if platform.system() != 'Darwin':
             self.audio = pyaudio.PyAudio()
+        else:
+            self.audio_output_active = False
         self.audio_stream = None
         self.audio_queue = queue.Queue()
+        
+        # Interruption control flags (can be overridden by subclasses)
+        self.interrupt_tts = threading.Event()
+        self.user_speaking = threading.Event()
         
         # Initialize TTS
         print("Loading TTS model...")
@@ -179,26 +185,100 @@ class LLMTTSStreamer:
                 print(f"Audio format: {sample_rate}Hz, {sample_width} bytes, {channels} channels")
 
     def write_raw_data(self, audio_data):
-        """Queue audio data for playback."""
+        """Queue audio data for playback - with optional interruption check."""
+        # Check for interruption if flags exist (for subclass compatibility)
+        if (hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or \
+           (hasattr(self, 'user_speaking') and self.user_speaking.is_set()):
+            return
         self.audio_queue.put(audio_data)
 
     def audio_playback_worker(self):
-        """Ultra-optimized worker thread for audio playback."""
+        """Ultra-optimized worker thread for audio playback with interruption support."""
         while not self.stop_audio.is_set():
             try:
-                audio_data = self.audio_queue.get(timeout=0.01)  # Ultra-fast timeout
+                # Check for interruption before getting audio data
+                if (hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or \
+                   (hasattr(self, 'user_speaking') and self.user_speaking.is_set()):
+                    # Clear any remaining audio data when interrupted
+                    cleared = 0
+                    try:
+                        while not self.audio_queue.empty():
+                            self.audio_queue.get_nowait()
+                            self.audio_queue.task_done()
+                            cleared += 1
+                    except queue.Empty:
+                        pass
+                    
+                    if cleared > 0:
+                        print(f"🗑️ Audio worker cleared {cleared} chunks")
+                    
+                    # Stop any active audio output
+                    if platform.system() == 'Darwin' and hasattr(self, 'audio_output_active') and self.audio_output_active:
+                        try:
+                            sd.stop()
+                            self.audio_output_active = False
+                        except:
+                            pass
+                    
+                    time.sleep(0.01)
+                    continue
+                
+                # Get audio data with timeout for responsiveness
+                timeout = 0.005 if hasattr(self, 'interrupt_tts') else 0.01
+                try:
+                    audio_data = self.audio_queue.get(timeout=timeout)
+                except queue.Empty:
+                    continue
+                
+                # Check interruption again before playing
+                if (hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or \
+                   (hasattr(self, 'user_speaking') and self.user_speaking.is_set()):
+                    self.audio_queue.task_done()
+                    continue
+                
                 if self.audio_stream and audio_data:
-                    if platform.system() != 'Darwin':
-                        self.audio_stream.write(audio_data)
-                    else:
-                        # Convert raw bytes → numpy array
-                        audio_array = np.frombuffer(audio_data, dtype=np.int16)
-                        self.audio_stream.write(audio_array)
+                    try:
+                        if platform.system() != 'Darwin':
+                            self.audio_stream.write(audio_data)
+                        else:
+                            # Convert bytes to numpy array for sounddevice
+                            if hasattr(self, 'sample_width') and self.sample_width == 4:
+                                audio_array = np.frombuffer(audio_data, dtype=np.int32)
+                            else:
+                                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                            
+                            # Reshape for channels if needed
+                            if hasattr(self, 'channels') and self.channels > 1:
+                                audio_array = audio_array.reshape(-1, self.channels)
+                            
+                            # Play audio chunk using sounddevice
+                            if hasattr(self, 'audio_output_active'):
+                                self.audio_output_active = True
+                            sd.play(audio_array, samplerate=self.sample_rate, blocking=False)
+                            
+                            # Wait for the chunk to finish or be interrupted
+                            if hasattr(self, 'interrupt_tts'):
+                                chunk_duration = len(audio_array) / self.sample_rate
+                                sleep_time = min(chunk_duration, 0.1)
+                                time.sleep(sleep_time)
+                                
+                                if not self.interrupt_tts.is_set() and not self.user_speaking.is_set():
+                                    sd.wait()
+                            else:
+                                sd.wait()
+                            
+                            if hasattr(self, 'audio_output_active'):
+                                self.audio_output_active = False
+                    except Exception as e:
+                        print(f"Audio playback error: {e}")
+                        if hasattr(self, 'audio_output_active'):
+                            self.audio_output_active = False
+                
                 self.audio_queue.task_done()
-            except queue.Empty:
-                continue
+                
             except Exception as e:
-                print(f"Audio playback error: {e}")
+                print(f"Audio playback worker error: {e}")
+                time.sleep(0.01)
 
     def start_audio_thread(self):
         """Start the audio playback thread."""
@@ -210,6 +290,12 @@ class LLMTTSStreamer:
     def stop_audio_thread(self):
         """Stop the audio playback thread."""
         self.stop_audio.set()
+        if platform.system() == 'Darwin' and hasattr(self, 'audio_output_active') and self.audio_output_active:
+            try:
+                sd.stop()
+                self.audio_output_active = False
+            except:
+                pass
         if self.audio_thread and self.audio_thread.is_alive():
             self.audio_thread.join(timeout=0.1)
 
