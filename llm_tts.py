@@ -515,10 +515,36 @@ class LLMTTSStreamer:
                     continue
                 elif not user_input:
                     continue
+                
+                # Interrupt any ongoing TTS and cancel previous response generation
+                self.interrupt_tts.set()
+                self.stream_generation += 1
+                
+                # Flush any remaining audio to prevent overlap with the new response
+                try:
+                    while not self.audio_queue.empty():
+                        self.audio_queue.get_nowait()
+                        self.audio_queue.task_done()
+                except queue.Empty:
+                    pass
+                
+                # On macOS, ensure any active playback stops immediately
+                if platform.system() == 'Darwin':
+                    try:
+                        sd.stop()
+                        if hasattr(self, 'audio_output_active'):
+                            self.audio_output_active = False
+                    except Exception:
+                        pass
+                
                 if conversation_history:
                     prompt = "\n".join(conversation_history) + f"\nHuman: {user_input}\nAssistant:"
                 else:
                     prompt = f"Human: {user_input}\nAssistant:"
+                
+                # Allow new TTS to play for the upcoming response
+                self.interrupt_tts.clear()
+                
                 print("Assistant: ", end="", flush=True)
                 response_text = self.stream_llm_response_ultra_optimized(prompt, expected_generation=self.stream_generation)
                 if response_text:

@@ -6,6 +6,7 @@ Supports interruption: user can speak while AI is talking to interrupt it.
 
 import threading
 import time
+import queue
 
 # Import only what's not already in parent class
 
@@ -154,6 +155,16 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         if not self.llm_available:
             print("❌ LLM server not available!")
             return
+        
+        # Ensure any ongoing TTS/LLM is stopped and previous audio is cleared
+        self.interrupt_tts.set()
+        try:
+            while not self.audio_queue.empty():
+                self.audio_queue.get_nowait()
+                self.audio_queue.task_done()
+        except queue.Empty:
+            pass
+        
         # Build prompt from recent history
         if self.conversation_history:
             recent_history = self.conversation_history[-8:]
@@ -165,6 +176,10 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         if hasattr(self, 'stream_generation'):
             self.stream_generation += 1
         local_gen = self.stream_generation
+        
+        # Allow new TTS to play for the upcoming response only if user is not speaking
+        if not self.user_speaking.is_set():
+            self.interrupt_tts.clear()
         
         # Delegate actual streaming (including token-by-token TTS) to parent
         response_text = super().stream_llm_response_ultra_optimized(prompt, expected_generation=local_gen)
