@@ -30,27 +30,52 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 ### Key File
 `asr_llm_tts.py` – class `VoiceConversationSystem`
 
+### llm models 
+- Llama-3.2-3B-Instruct-IQ3_M.gguf
+- llama_3_Base_adult.Q2_K.gguf
+- gemma-3-270m-it-F16.gguf
+- LFM2-1.2B-F16.gguf
+
+
+
 ### Installation
 ```
 pip install -r requirements.txt
 ```
+  - for macOS, if python==3.10, please `brew install portaudio` before executing the above so that `pyaudio` can be installed. However, the `pyaudio` **here** serves `RealtimeSTT`, instead of itself, that's why `sounddevice` is introduced.
+
+
 Ensure you have:
 - `llama-server` (from llama.cpp) running locally
-  - e.g. 
+  - e.g. 1
+    ```bash
+    ./llama-server --model ./models/your-model.Q4_K_M.gguf --host 0.0.0.0 --port 8080 \
+      --ctx-size 4096 --parallel 2 --no-mmap
+    ```
+    Tune args for your hardware (quant, threads, ctx-size). For fastest first token, prefer smaller / quantized model.
+
+  - e.g. 2
   ``` bash
   llama-server -m Llama-3.2-3B-Instruct-IQ3_M.gguf 
   ```
-  which can be called by
+  which can be verified by calling
   ```bash
   curl http://localhost:8080/completion -d '{
     "prompt": "Your prompt here",
     "n_predict": 128
   }'
   ```
+  if get results like 
+  ```bash
+  {"index":0,"content":" It's great to be here. I'm so excited ...
+  ```
+  Then it's okay.
 
-- Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx`) placed in repo root (gitignored)
+- Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx` as well as `en_US-hfc_female-medium.onnx.json`) placed in repo root (gitignored)
+  - e.g. download the model from `https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium`.
 
 ### Run
+
 ```
 python asr_llm_tts.py --llm-url http://localhost:8080 --tts-model en_US-hfc_female-medium.onnx
 ```
@@ -59,12 +84,14 @@ Test components:
 python asr_llm_tts.py --test
 ```
 
-### llama.cpp Server Example
+- for macOS --
+```bash
+pip install "httpx[http2]"
+pip install sounddevice
 ```
-./llama-server --model ./models/your-model.Q4_K_M.gguf --host 0.0.0.0 --port 8080 \
-  --ctx-size 4096 --parallel 2 --no-mmap
-```
-Tune args for your hardware (quant, threads, ctx-size). For fastest first token, prefer smaller / quantized model.
+Make sure the `numpy` used is of version less than 2.0.
+
+
 
 ### Latency Metrics Printed
 ```
@@ -107,4 +134,12 @@ ASR callbacks (`on_recording_start/stop/transcription_start`) immediately:
 - Automated model download / verification script
 
 ---
+
+FOCUSES
+1. 停止自我循环chat; 
+2. better vocabulary; 
+3. voice style;  
+4. latency; 
+5. speaking style
+
 

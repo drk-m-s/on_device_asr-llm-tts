@@ -14,3 +14,4 @@ RealtimeSTT
 
 # (Optional) add any extras below
 # uvloop ; platform_system=='Linux'
+
