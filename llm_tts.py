@@ -50,6 +50,8 @@ class LLMTTSStreamer:
         # Interruption control flags (can be overridden by subclasses)
         self.interrupt_tts = threading.Event()
         self.user_speaking = threading.Event()
+        # Stream generation counter for cancellation of stale responses
+        self.stream_generation = 0
         
         # Initialize TTS
         print("Loading TTS model...")
@@ -299,31 +301,55 @@ class LLMTTSStreamer:
         if self.audio_thread and self.audio_thread.is_alive():
             self.audio_thread.join(timeout=0.1)
 
-    def stream_tts_async(self, text):
-        """Asynchronous TTS processing to avoid blocking."""
+    def stream_tts_async(self, text, expected_generation=None):
+        """Asynchronous TTS processing to avoid blocking. Cancels if generation changes or interrupted."""
         if not text.strip():
+            return
+        
+        # Capture generation snapshot for this TTS task
+        local_gen = self.stream_generation if expected_generation is None else expected_generation
+        
+        # If already stale before starting, abort early
+        if local_gen != self.stream_generation:
             return
         
         self.start_audio_thread()
         
         for chunk in self.voice.synthesize(text):
+            # Abort if interrupted or generation changed
+            if ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                (local_gen != self.stream_generation)):
+                break
+            
             self.set_audio_format(
                 chunk.sample_rate, 
                 chunk.sample_width, 
                 chunk.sample_channels
             )
+            
+            # Last-moment check before enqueueing audio
+            if ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                (local_gen != self.stream_generation)):
+                break
+            
             self.write_raw_data(chunk.audio_int16_bytes)
 
     def stream_tts(self, text):
         """Submit TTS task to thread pool for parallel processing."""
         if text.strip():
-            self.tts_executor.submit(self.stream_tts_async, text)
+            # Pass current generation so the task can self-cancel if stale
+            self.tts_executor.submit(self.stream_tts_async, text, self.stream_generation)
 
-    def stream_llm_response_ultra_optimized(self, prompt, max_tokens=512):
-        """Ultra-optimized LLM response streaming."""
+    def stream_llm_response_ultra_optimized(self, prompt, max_tokens=512, expected_generation=None):
+        """Ultra-optimized LLM response streaming with cancellation support."""
         if not self.llm_available:
             print("LLM server not available!")
             return ""
+        
+        # Capture the generation this stream belongs to
+        local_gen = self.stream_generation if expected_generation is None else expected_generation
         
         start_time = time.perf_counter()
         first_token_time = None
@@ -345,6 +371,8 @@ class LLMTTSStreamer:
         data_prefix = 'data: '
         done_marker = '[DONE]'
         
+        aborted = False
+        
         try:
             # Use raw bytes processing for maximum speed
             with self.session.stream("POST", self.completion_url, json=payload) as response:
@@ -356,6 +384,13 @@ class LLMTTSStreamer:
                 # Ultra-fast streaming with minimal overhead
                 buffer = b""
                 for chunk in response.iter_bytes(chunk_size=4096):  # Larger chunks for efficiency
+                    # Abort immediately if interrupted, user is speaking, or generation changed
+                    if ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                        (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                        (local_gen != self.stream_generation)):
+                        aborted = True
+                        break
+
                     if not chunk:
                         continue
 
@@ -363,6 +398,13 @@ class LLMTTSStreamer:
                     
                     # Process complete lines only
                     while b'\n' in buffer:
+                        # Check interruption and generation inside inner loop as well
+                        if ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                            (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                            (local_gen != self.stream_generation)):
+                            aborted = True
+                            break
+
                         line_bytes, buffer = buffer.split(b'\n', 1)
 
                         try:
@@ -410,16 +452,31 @@ class LLMTTSStreamer:
                             # Ultra-fast sentence detection
                             if (('.' in token or '!' in token or '?' in token or '\n' in token) 
                                 and len(text_buffer.strip()) > 10):
-                                # Submit to TTS immediately without blocking
-                                self.tts_executor.submit(self.stream_tts_async, text_buffer.strip())
+                                # Submit to TTS immediately without blocking, unless interrupted or generation changed
+                                if not ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                                        (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                                        (local_gen != self.stream_generation)):
+                                    self.tts_executor.submit(self.stream_tts_async, text_buffer.strip(), local_gen)
                                 text_buffer = ""
 
                         except json.JSONDecodeError:
                             continue
+                    
+                    if aborted:
+                        break
             
             # Handle remaining text
             if text_buffer.strip():
-                self.tts_executor.submit(self.stream_tts_async, text_buffer.strip())
+                # Only submit if not interrupted and generation unchanged
+                if not ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
+                        (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
+                        (local_gen != self.stream_generation)):
+                    self.tts_executor.submit(self.stream_tts_async, text_buffer.strip(), local_gen)
+            
+            # If aborted due to interruption, stop early
+            if aborted:
+                print("\n⏹️ LLM response interrupted by user.")
+                return response_text
             
             # Calculate performance metrics
             total_time = time.perf_counter() - start_time
@@ -463,7 +520,7 @@ class LLMTTSStreamer:
                 else:
                     prompt = f"Human: {user_input}\nAssistant:"
                 print("Assistant: ", end="", flush=True)
-                response_text = self.stream_llm_response_ultra_optimized(prompt)
+                response_text = self.stream_llm_response_ultra_optimized(prompt, expected_generation=self.stream_generation)
                 if response_text:
                     conversation_history.append(f"Human: {user_input}")
                     conversation_history.append(f"Assistant: {response_text}")
