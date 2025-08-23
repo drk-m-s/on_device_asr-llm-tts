@@ -155,5 +155,11 @@ pip install soundfile
 - `tts_generate.py` is how onnx creates its wav file according to the piece of text.
 - `voiceprint_compare.py` is how to compare the voiceprint between wav files.
 
+---- to be edited
+
+~~pip install pyspeexdsp~~
+~~brew install speexdsp   # macOS~~
+~~pip install py-webrtc-audio-processing~~
+
 
 

@@ -1,5 +1,4 @@
-"""
-Complete ASR-LLM-TTS Voice Conversation System
+"""Complete ASR-LLM-TTS Voice Conversation System
 Listens to user speech, processes it through LLM, and responds with synthesized speech.
 Supports interruption: user can speak while AI is talking to interrupt it.
 """
@@ -8,14 +7,15 @@ import threading
 import time
 import queue
 
-# Import only what's not already in parent class
-
 # ASR library
 from RealtimeSTT import AudioToTextRecorder
 
+# Import parent class
 from llm_tts import LLMTTSStreamer
 
-class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part form llm_tts.py file so save the code.
+class VoiceConversationSystem(LLMTTSStreamer):
+    """Voice conversation system that inherits LLM-TTS functionality."""
+    
     def __init__(self, llm_server_url=None, tts_model_path=None,
                  asr_model="tiny",
                  enable_history_summarization=True,
@@ -25,10 +25,12 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         Initialize the complete voice conversation system.
         
         Args:
-          llm_server_url: URL of the LLM server (default: http://localhost:8080)
-          tts_model_path: Path to the TTS model file
-          asr_model: Fast_Whisper ASR model size ('tiny', 'base', 'small', 'medium', 'large') 
-          enable_history_summarization: summarize older turns to shrink prompt
+            llm_server_url: URL of the LLM server (default: http://localhost:8080)
+            tts_model_path: Path to the TTS model file
+            asr_model: Fast_Whisper ASR model size ('tiny', 'base', 'small', 'medium', 'large')
+            enable_history_summarization: Whether to summarize older turns to shrink prompt
+            summarize_after_turns: Number of turns after which to summarize
+            history_trim_threshold: Maximum number of history entries to keep
         """
         # Initialize parent class first
         super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path)
@@ -41,18 +43,14 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         # Initialize ASR with proper callback handling
         print(f"Loading ASR model: {asr_model}")
         self.asr_recorder = AudioToTextRecorder(
-            model=asr_model,  # Use configurable model (size or local path)
+            model=asr_model,
             enable_realtime_transcription=True,
             silero_sensitivity=0.3,
-            silero_use_onnx = True,  # Use ONNX for faster inference
-            post_speech_silence_duration = 0.5, 
-            # wakeword_backend = "pvporcupine",
-            # wake_words = "alexa",
+            silero_use_onnx=True,
+            post_speech_silence_duration=0.5,
             language="en",
-            # on_recording_start=self._on_recording_start,
-            # on_recording_stop=self._on_recording_stop,
-            on_vad_start = self._on_recording_start,
-            on_vad_stop = self._on_recording_stop,
+            on_vad_start=self._on_recording_start,
+            on_vad_stop=self._on_recording_stop,
             on_transcription_start=self._on_transcription_start
         )
         print("ASR model loaded and ready")
@@ -60,12 +58,12 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         # ASR-specific conversation control
         self.conversation_active = False
         
-        # TTS interruption control - ENHANCED FOR IMMEDIATE INTERRUPTION
-        self.interrupt_tts = threading.Event()  # Flag to signal TTS interruption
-        self.user_speaking = threading.Event()  # Flag to track if user is speaking
-        self.ai_should_be_quiet = threading.Event()  # Flag to prevent AI from speaking during user input
+        # TTS interruption control
+        self.interrupt_tts = threading.Event()
+        self.user_speaking = threading.Event()
+        self.ai_should_be_quiet = threading.Event()
         
-        # Conversation history - separate from parent for ASR features
+        # Conversation history
         self.conversation_history = []
         
 
@@ -88,16 +86,18 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
     def _on_recording_stop(self, *args, **kwargs):
         """Callback when user stops speaking."""
         print("🎤 User stopped speaking")
+        
         # Allow TTS to resume now that user stopped speaking
         self.interrupt_tts.clear()
         self.user_speaking.clear()
+        
         # Keep AI quiet for a short moment to ensure clean transition
         threading.Timer(0.5, self.ai_should_be_quiet.clear).start()
 
     def _on_transcription_start(self, *args, **kwargs):
-        """Callback when transcription starts - accepts any arguments."""
+        """Callback when transcription starts."""
         print("📝 Transcription starting...")
-        # Do not interrupt TTS here to avoid unintended muting
+        
         # Briefly prevent new speech to avoid overlap, then allow
         self.ai_should_be_quiet.set()
         threading.Timer(0.3, self.ai_should_be_quiet.clear).start()
@@ -107,51 +107,54 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         print("🚨 EMERGENCY STOP: Interrupting TTS output NOW!")
         self.interrupt_tts.set()
 
-
-
-    # Removed duplicated set_audio_format - using parent implementation
-
-    # Removed duplicated write_raw_data - using parent implementation with interruption support
-
-    # Removed duplicated audio_playback_worker, start_audio_thread, stop_audio_thread - using enhanced parent implementations
-
     def stream_tts_async(self, text, expected_generation=None):
         """
-        Delegate to parent async TTS for playback without pre-gating,
-        letting the parent audio worker handle interruption, queue flushing,
-        and generation-based cancellation.
+        Delegate to parent async TTS for playback.
+        
+        Args:
+            text: Text to synthesize
+            expected_generation: Generation number for cancellation
         """
         if not text.strip():
             return
-        # Do NOT clear interrupt here; cancellation is handled centrally
+        
+        # Delegate to parent implementation
         super().stream_tts_async(text, expected_generation)
 
-
-
     def _summarize_history(self):
-        """Summarize older history turns into a compact form to shrink prompt.
-        Simple heuristic: take all but last 4 entries, truncate each line, join.
-        Replace with a single summary line at beginning.
+        """
+        Summarize older history turns into a compact form to shrink prompt.
+        
+        Takes all but last 4 entries, truncates each line, and creates a summary.
         """
         if len(self.conversation_history) < self.summarize_after_turns:
             return
+            
         older = self.conversation_history[:-4]
         recent = self.conversation_history[-4:]
-        # Naive compression (could be replaced with a local summarizer)
+        
+        # Compress older entries
         compressed = []
         for line in older:
             if len(line) > 160:
                 compressed.append(line[:157] + '...')
             else:
                 compressed.append(line)
+                
         summary = "Summary: " + " | ".join(compressed)
-        if len(summary) > 1000:  # Hard cap
+        if len(summary) > 1000:
             summary = summary[:997] + '...'
+            
         self.conversation_history = [summary] + recent
         print("📝 History summarized (length reduced)")
 
     def process_llm_response_ultra_optimized(self, user_input):
-        """Build prompt with history and delegate streaming to parent implementation to reduce duplication."""
+        """
+        Build prompt with history and delegate streaming to parent implementation.
+        
+        Args:
+            user_input: User's input text to process
+        """
         if not self.llm_available:
             print("❌ LLM server not available!")
             return
@@ -181,14 +184,17 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         if not self.user_speaking.is_set():
             self.interrupt_tts.clear()
         
-        # Delegate actual streaming (including token-by-token TTS) to parent
+        # Delegate actual streaming to parent
         response_text = super().stream_llm_response_ultra_optimized(prompt, expected_generation=local_gen)
+        
         # Update history and optionally summarize/trim
         if response_text:
             self.conversation_history.append(f"Human: {user_input}")
             self.conversation_history.append(f"Assistant: {response_text}")
+            
             if self.enable_history_summarization and len(self.conversation_history) > self.summarize_after_turns:
                 self._summarize_history()
+                
             if len(self.conversation_history) > self.history_trim_threshold:
                 self.conversation_history = self.conversation_history[-self.history_trim_threshold:]
 
@@ -219,12 +225,13 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         if 'clear' in text.lower() or 'reset' in text.lower():
             self.conversation_history = []
             print("🗑️ Conversation history cleared.")
+            
             # Only respond if AI is not being interrupted
             if not self.user_speaking.is_set():
                 self.stream_tts_async("Conversation history cleared.")
             return
         
-        # Process through LLM and respond with TTS using ultra-optimized method
+        # Process through LLM and respond with TTS
         self.process_llm_response_ultra_optimized(text)
 
     def start_voice_conversation(self):
@@ -241,7 +248,8 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         print("🗑️ Say 'clear' or 'reset' to clear conversation history")
         print("-" * 50)
         
-        welcome_msg = "Hello! I'm ready to chat with you. You can interrupt me anytime by speaking. Please speak whenever you're ready."
+        welcome_msg = ("Hello! I'm ready to chat with you. You can interrupt me "
+                      "anytime by speaking. Please speak whenever you're ready.")
         print(f"🤖 {welcome_msg}")
         self.stream_tts_async(welcome_msg)
         
@@ -269,7 +277,7 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         print("1. Testing TTS...")
         test_text = "Hello! This is a test of the text-to-speech system."
         self.stream_tts_async(test_text)
-        time.sleep(3)  # Wait for TTS to finish
+        time.sleep(3)
         
         # Test ASR
         print("2. Testing ASR...")
@@ -300,7 +308,7 @@ class VoiceConversationSystem(LLMTTSStreamer): ## it inherits the llm-tts part f
         """Clean up resources including ASR-specific ones."""
         # ASR-specific cleanup
         self.conversation_active = False
-        self.interrupt_tts.set()  # Stop any ongoing TTS
+        self.interrupt_tts.set()
         
         # Call parent cleanup for common resources
         super().cleanup()
@@ -311,11 +319,11 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Voice Conversation System (ASR-LLM-TTS)")
-    parser.add_argument("--llm-url", type=str, default="http://localhost:8080", 
+    parser.add_argument("--llm-url", type=str, default="http://localhost:8080",
                        help="URL of the llama-server (default: http://localhost:8080)")
-    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx", 
+    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx",
                        help="Path to Piper TTS model")
-    parser.add_argument("--asr-model", type=str, default="tiny", 
+    parser.add_argument("--asr-model", type=str, default="tiny",
                        help="ASR model size (tiny, base, small, medium, large) or path to local model file")
     parser.add_argument("--test", action="store_true", help="Test all components")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
@@ -332,7 +340,8 @@ def main():
         
         if args.test_tts:
             # Test TTS only
-            test_text = "Hello! This is a test of the voice conversation system. The text-to-speech is working correctly. Try speaking to interrupt this message."
+            test_text = ("Hello! This is a test of the voice conversation system. "
+                        "The text-to-speech is working correctly. Try speaking to interrupt this message.")
             system.stream_tts_async(test_text)
             time.sleep(3)
         elif args.test:
