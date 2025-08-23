@@ -143,3 +143,17 @@ FOCUSES
 5. speaking style
 
 
+### voiceprint issue
+the folder of voiceprint/ illustrates the voiceprint registration from human throat via recording  vs. from onnx model, and its comparison.
+
+to run them, you need to do:
+```bash
+pip install resemblyzer librosa numpy
+pip install soundfile
+```
+- `record_voice.py` is how human read and get wav file.
+- `tts_generate.py` is how onnx creates its wav file according to the piece of text.
+- `voiceprint_compare.py` is how to compare the voiceprint between wav files.
+
+
+
