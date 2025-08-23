@@ -106,7 +106,7 @@ class LLMTTSStreamer:
         self.sentence_endings = {'.', '!', '?', '\n'}
         
         # TTS thread pool for parallel processing
-        self.tts_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="TTS")
+        self.tts_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="TTS")
         
         # WARM UP CONNECTION - Pre-establish connection to reduce first request latency
         self._warm_up_connection()
