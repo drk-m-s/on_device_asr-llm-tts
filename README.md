@@ -143,3 +143,36 @@ FOCUSES
 5. speaking style
 
 
+### voiceprint issue
+the folder of voiceprint/ illustrates the voiceprint registration from human throat via recording  vs. from onnx model, and its comparison.
+
+to run them, you need to do:
+```bash
+pip install resemblyzer librosa numpy
+pip install soundfile
+```
+- `record_voice.py` is how human read and get wav file.
+- `tts_generate.py` is how onnx creates its wav file according to the piece of text.
+- `voiceprint_compare.py` is how to compare the voiceprint between wav files.
+
+
+### echo cancellation
+#### approach 0: the vanilla dir --- vanilla/
+
+
+#### approach 1: only take the user's sound as THE input --- voiceprint/
+
+
+user's sound is pre-recorded in voiceprint/ dir.
+Not successful by far.
+Now， it can know how similar the audio is with the pre-recorded sample wav file.
+But the mute-record-speaker interaction is not sorted out...
+
+#### approach 2: LiveKit + WebRTC AEC (recommended) ---  livekit_appended
+LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Cancellation (AEC)
+- [x] rewrite the asr_llm_tts.py upon the foundation of WebRTC and LiveKit.
+- [ ] apply AEC then.
+
+
+
+
