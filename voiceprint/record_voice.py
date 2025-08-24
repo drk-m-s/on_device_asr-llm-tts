@@ -2,6 +2,8 @@
 import sounddevice as sd
 import soundfile as sf
 
+# TEXT = "Hi, this is another five second test sentence for voiceprint."
+
 def record_voice(filename="my_voice.wav", duration=5, samplerate=16000):
     print(f"🎤 Recording {duration} seconds... Speak now!")
     audio = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype="float32")

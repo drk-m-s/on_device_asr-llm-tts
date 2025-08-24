@@ -32,7 +32,7 @@ class LLMTTSStreamer:
         """
         # Default paths
         if tts_model_path is None:
-            tts_model_path = "en_US-hfc_female-medium.onnx"
+            tts_model_path = "../en_US-hfc_female-medium.onnx"
         
         if llm_server_url is None:
             llm_server_url = "http://localhost:8080"
@@ -610,7 +610,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Local LLM to TTS Streamer")
     parser.add_argument("--llm-url", type=str, default="http://localhost:8080", help="URL of the llama-server (default: http://localhost:8080)")
-    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
+    parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     parser.add_argument("--test-llm", action="store_true", help="Test LLM connection only")
     parser.add_argument("--test-all", action="store_true", help="Test both LLM and TTS")

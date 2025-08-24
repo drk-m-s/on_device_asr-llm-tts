@@ -321,7 +321,7 @@ def main():
     parser = argparse.ArgumentParser(description="Voice Conversation System (ASR-LLM-TTS)")
     parser.add_argument("--llm-url", type=str, default="http://localhost:8080",
                        help="URL of the llama-server (default: http://localhost:8080)")
-    parser.add_argument("--tts-model", type=str, default="en_US-hfc_female-medium.onnx",
+    parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx",
                        help="Path to Piper TTS model")
     parser.add_argument("--asr-model", type=str, default="tiny",
                        help="ASR model size (tiny, base, small, medium, large) or path to local model file")
