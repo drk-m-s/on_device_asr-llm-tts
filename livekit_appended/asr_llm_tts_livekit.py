@@ -223,7 +223,8 @@ class VoiceConversationSystem(LLMTTSStreamer):
         # ASR gating related to AI speaking
         self.ai_talking = threading.Event()
         self._asr_tail_mute_until = 0.0  # monotonic seconds
-        self._aec_rms_threshold = 900.0  # int16 RMS threshold to drop frames during AI speech
+        # self._aec_rms_threshold = 900.0  # int16 RMS threshold to drop frames during AI speech
+        self._aec_rms_threshold = 1600.0  # int16 RMS threshold to drop frames during AI speech
         # Require multiple consecutive frames to consider barge-in voice valid
         self._barge_in_frames_required = 4
         self._barge_in_counter = 0
