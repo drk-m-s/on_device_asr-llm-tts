@@ -160,10 +160,8 @@ pip install soundfile
 #### approach 0: the vanilla dir --- vanilla/
 
 
-
-
 #### approach 1: only take the user's sound as THE input --- voiceprint/
-TBD
+
 
 user's sound is pre-recorded in voiceprint/ dir.
 Not successful by far.
