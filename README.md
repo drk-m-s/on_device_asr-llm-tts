@@ -228,6 +228,6 @@ ChatTTS
 GPT-SoVITS-WebUI
 CosyVoice
 bark
-OpenVoice
+OpenVoice:  create every new piece of voice and taint it with wanted color. That is a little timely.  i think i should taint every materials to be trained with the color and train a new tts model in onnx.
 
 
