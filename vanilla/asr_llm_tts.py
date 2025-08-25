@@ -20,7 +20,8 @@ class VoiceConversationSystem(LLMTTSStreamer):
                  asr_model="tiny",
                  enable_history_summarization=True,
                  summarize_after_turns=10,
-                 history_trim_threshold=12):
+                 history_trim_threshold=12,
+                 conversation_style=None):
         """
         Initialize the complete voice conversation system.
         
@@ -31,9 +32,10 @@ class VoiceConversationSystem(LLMTTSStreamer):
             enable_history_summarization: Whether to summarize older turns to shrink prompt
             summarize_after_turns: Number of turns after which to summarize
             history_trim_threshold: Maximum number of history entries to keep
+            conversation_style: Optional ConversationStyle for enhanced natural conversation
         """
         # Initialize parent class first
-        super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path)
+        super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path, conversation_style=conversation_style)
         
         # ASR-specific configuration
         self.enable_history_summarization = enable_history_summarization
@@ -325,17 +327,40 @@ def main():
                        help="Path to Piper TTS model")
     parser.add_argument("--asr-model", type=str, default="tiny",
                        help="ASR model size (tiny, base, small, medium, large) or path to local model file")
+    parser.add_argument("--conversation-style", type=str, choices=["casual", "professional", "friendly", "technical"],
+                       default="friendly", help="Conversation style for enhanced natural speech (default: friendly)")
+    parser.add_argument("--disable-enhancements", action="store_true",
+                       help="Disable conversation enhancements (use original behavior)")
     parser.add_argument("--test", action="store_true", help="Test all components")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     
     args = parser.parse_args()
+    
+    # Determine conversation style
+    conversation_style = None
+    if not args.disable_enhancements:
+        from llm_tts import ConversationStyle, VocabularyStyle
+        style_map = {
+            "casual": VocabularyStyle.CASUAL,
+            "professional": VocabularyStyle.PROFESSIONAL,
+            "friendly": VocabularyStyle.FRIENDLY,
+            "technical": VocabularyStyle.TECHNICAL
+        }
+        conversation_style = ConversationStyle(
+            vocabulary_style=style_map[args.conversation_style],
+            personality_traits=["helpful", "engaging"]
+        )
+        print(f"🎭 Enhanced conversation mode: {args.conversation_style}")
+    else:
+        print("🔧 Using original conversation behavior")
     
     # Initialize the voice conversation system
     try:
         system = VoiceConversationSystem(
             llm_server_url=args.llm_url,
             tts_model_path=args.tts_model,
-            asr_model=args.asr_model
+            asr_model=args.asr_model,
+            conversation_style=conversation_style
         )
         
         if args.test_tts:

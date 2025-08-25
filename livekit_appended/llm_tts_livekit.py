@@ -6,6 +6,10 @@ Streams LLM output through TTS model to computer speakers with low latency.
 import threading
 import queue
 import time
+from enum import Enum
+from dataclasses import dataclass
+from typing import Optional, List
+import random
 
 # Audio libraries
 import platform
@@ -25,10 +29,95 @@ from concurrent.futures import ThreadPoolExecutor
 from piper import PiperVoice
 
 
+class VocabularyStyle(Enum):
+    """Vocabulary complexity levels for conversation."""
+    SIMPLE = "simple"
+    MODERATE = "moderate"
+    ADVANCED = "advanced"
+
+
+@dataclass
+class ConversationStyle:
+    """Configuration for conversation style and personality."""
+    name: str
+    personality: str
+    vocabulary: VocabularyStyle
+    response_length: str
+    formality: str
+    enthusiasm: str
+    filler_words: List[str]
+    
+    @classmethod
+    def get_preset(cls, style_name: str) -> 'ConversationStyle':
+        """Get a preset conversation style."""
+        presets = {
+            "casual": cls(
+                name="Casual",
+                personality="friendly, relaxed, and conversational",
+                vocabulary=VocabularyStyle.SIMPLE,
+                response_length="concise but complete",
+                formality="informal",
+                enthusiasm="moderate",
+                filler_words=["um", "well", "you know", "like", "so"]
+            ),
+            "professional": cls(
+                name="Professional",
+                personality="polite, articulate, and business-like",
+                vocabulary=VocabularyStyle.ADVANCED,
+                response_length="comprehensive and well-structured",
+                formality="formal",
+                enthusiasm="measured",
+                filler_words=["certainly", "indeed", "furthermore", "moreover"]
+            ),
+            "friendly": cls(
+                name="Friendly",
+                personality="warm, supportive, and encouraging",
+                vocabulary=VocabularyStyle.MODERATE,
+                response_length="thoughtful and engaging",
+                formality="semi-formal",
+                enthusiasm="high",
+                filler_words=["oh", "well", "you see", "actually", "really"]
+            ),
+            "enthusiastic": cls(
+                name="Enthusiastic",
+                personality="energetic, passionate, and expressive",
+                vocabulary=VocabularyStyle.MODERATE,
+                response_length="detailed and animated",
+                formality="informal",
+                enthusiasm="very high",
+                filler_words=["wow", "amazing", "fantastic", "incredible", "absolutely"]
+            ),
+            "thoughtful": cls(
+                name="Thoughtful",
+                personality="reflective, analytical, and contemplative",
+                vocabulary=VocabularyStyle.ADVANCED,
+                response_length="in-depth and nuanced",
+                formality="semi-formal",
+                enthusiasm="low",
+                filler_words=["hmm", "let me think", "considering", "perhaps", "interestingly"]
+            ),
+            "concise": cls(
+                name="Concise",
+                personality="direct, efficient, and to-the-point",
+                vocabulary=VocabularyStyle.SIMPLE,
+                response_length="brief and focused",
+                formality="neutral",
+                enthusiasm="low",
+                filler_words=[]
+            )
+        }
+        return presets.get(style_name.lower(), presets["casual"])
+
+
 class LLMTTSStreamer:
-    def __init__(self, llm_server_url=None, tts_model_path=None):
+    def __init__(self, llm_server_url=None, tts_model_path=None, conversation_style=None):
         """
         Initialize the LLM-TTS streamer with maximum optimization.
+        
+        Args:
+            llm_server_url: URL of the LLM server
+            tts_model_path: Path to the TTS model
+            conversation_style: ConversationStyle object or style name string for enhanced conversations
         """
         # Default paths
         if tts_model_path is None:
@@ -38,6 +127,15 @@ class LLMTTSStreamer:
             llm_server_url = "http://localhost:8080"
         
         self.llm_server_url = llm_server_url.rstrip('/')
+        
+        # Enhanced conversation features
+        if conversation_style is not None:
+            if isinstance(conversation_style, str):
+                self.conversation_style = ConversationStyle.get_preset(conversation_style)
+            else:
+                self.conversation_style = conversation_style
+        else:
+            self.conversation_style = None
         
         # Initialize audio
         if platform.system() != 'Darwin':
@@ -146,6 +244,94 @@ class LLMTTSStreamer:
                     return response.status_code == 200
             except:
                 return False
+    
+    def _build_system_prompt(self, style: ConversationStyle, base_prompt="You are a helpful AI assistant.") -> str:
+        """Build enhanced system prompt based on conversation style."""
+        if not style:
+            return base_prompt
+        
+        # Base personality
+        personality = style.personality
+        
+        # Vocabulary instructions
+        vocab_instructions = {
+            VocabularyStyle.SIMPLE: "Use informal, friendly language with contractions. Be conversational and relaxed.",
+            VocabularyStyle.MODERATE: "Use professional but approachable language. Be clear and articulate.",
+            VocabularyStyle.ADVANCED: "Use sophisticated, expressive language. Show depth and expertise."
+        }
+        
+        # Response length guidance
+        length_guidance = {
+            "short": "Keep responses brief (1-2 sentences).",
+            "medium": "Provide moderate detail (2-4 sentences).",
+            "long": "Give comprehensive responses when appropriate.",
+            "concise but complete": "Be thorough yet efficient in explanations.",
+            "thoughtful and engaging": "Provide detailed, engaging responses.",
+            "comprehensive and well-structured": "Give complete, well-organized answers."
+        }
+        
+        enhanced_prompt = f"""{base_prompt}
+        
+Personality: You are {personality} chatter.
+        
+Communication Style: {vocab_instructions[style.vocabulary]}
+        
+Response Length: {length_guidance.get(style.response_length, "Provide moderate detail (2-4 sentences).")}
+        
+Natural Speech: Use natural speech patterns including occasional hesitations and filler words when appropriate.
+
+- Use natural, conversational language
+- Spell out numbers, dates, and abbreviations as they should be spoken
+- Use "and" instead of "&"
+- Convert symbols to words (% becomes "percent", @ becomes "at")
+- Use complete sentences that flow naturally when spoken
+- Avoid complex punctuation that doesn't translate to speech
+- Keep responses clear and direct for audio consumption
+
+- Never include asterisks (*), brackets [], parentheses (), or any formatting symbols
+- Never include index numbers, citations, or reference markers
+- Never include stage directions, annotations, or meta-commentary
+- Never include markup like bold, italics, or bullet points
+- Never include "Note:", "PS:", or similar written conventions
+- Avoid spelling out punctuation or formatting cues
+- Write everything as if speaking directly to the listener """
+        
+        return enhanced_prompt
+    
+    def _enhance_response_naturalness(self, text: str, style: ConversationStyle) -> str:
+        """Add natural conversation elements to make responses more human-like."""
+        if not style.filler_words:
+            return text
+        
+        sentences = text.split('. ')
+        enhanced_sentences = []
+        
+        for i, sentence in enumerate(sentences):
+            # Occasionally add filler words (20% chance)
+            if random.random() < 0.2 and style.filler_words:
+                filler = random.choice(style.filler_words)
+                if i == 0:  # Beginning of response
+                    sentence = f"{filler.capitalize()}, {sentence.lower()}"
+                else:  # Middle of response
+                    sentence = f"{filler}, {sentence}"
+            
+            enhanced_sentences.append(sentence)
+        
+        return '. '.join(enhanced_sentences)
+    
+    def set_conversation_style(self, style_name: str):
+        """Set the conversation style by name."""
+        self.conversation_style = ConversationStyle.get_preset(style_name)
+        print(f"Conversation style set to: {self.conversation_style.name}")
+    
+    def _show_style_menu(self):
+        """Display available conversation styles."""
+        styles = ["casual", "professional", "friendly", "enthusiastic", "thoughtful", "concise"]
+        print("\nAvailable conversation styles:")
+        for i, style in enumerate(styles, 1):
+            style_obj = ConversationStyle.get_preset(style)
+            print(f"{i}. {style_obj.name} - {style_obj.personality}")
+        return styles
 
     def set_audio_format(self, sample_rate, sample_width, channels):
         if platform.system() != 'Darwin':
@@ -469,8 +655,15 @@ class LLMTTSStreamer:
         first_token_time = None
         token_count = 0
         
+        # Enhanced prompt building when conversation style is available
+        if self.conversation_style:
+            system_prompt = self._build_system_prompt(self.conversation_style)
+            enhanced_prompt = f"{system_prompt}\n\n{prompt}"
+        else:
+            enhanced_prompt = prompt
+        
         payload = {
-            "prompt": prompt,
+            "prompt": enhanced_prompt,
             "max_tokens": max_tokens,
             "temperature": 0.7,
             "top_p": 0.9,
@@ -600,6 +793,10 @@ class LLMTTSStreamer:
                 print(f"\n[TIMING] Total response time: {total_time:.1f}s")
                 print(f"[TIMING] Tokens per second: {tokens_per_second:.1f}")
             
+            # Enhance response naturalness if conversation style is enabled
+            if self.conversation_style and response_text:
+                response_text = self._enhance_response_naturalness(response_text, self.conversation_style)
+            
             return response_text
 
         except Exception as e:
@@ -725,6 +922,10 @@ def main():
     parser = argparse.ArgumentParser(description="Local LLM to TTS Streamer")
     parser.add_argument("--llm-url", type=str, default="http://localhost:8080", help="URL of the llama-server (default: http://localhost:8080)")
     parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
+    parser.add_argument("--conversation-style", type=str, default="casual", 
+                       choices=["casual", "professional", "friendly", "enthusiastic", "thoughtful", "concise"],
+                       help="Conversation style for enhanced natural responses (default: casual)")
+    parser.add_argument("--disable-enhancements", action="store_true", help="Disable enhanced conversation features")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     parser.add_argument("--test-llm", action="store_true", help="Test LLM connection only")
     parser.add_argument("--test-all", action="store_true", help="Test both LLM and TTS")
@@ -732,9 +933,13 @@ def main():
     args = parser.parse_args()
 
     try:
+        # Determine conversation style
+        conversation_style = None if args.disable_enhancements else args.conversation_style
+        
         streamer = LLMTTSStreamer(
             llm_server_url=args.llm_url,
-            tts_model_path=args.tts_model
+            tts_model_path=args.tts_model,
+            conversation_style=conversation_style
         )
 
         if args.test_tts: # Test TTS only

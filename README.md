@@ -37,6 +37,24 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 - LFM2-1.2B-F16.gguf
 
 
+#### llm adaptation
+https://chatgpt.com/s/t_68ab14d326648191991a7a411520d4a7
+
+
+
+vocabulary style: via prompt
+
+breath style: i don't know how yet. finetune the tts model??
+
+
+
+how to customize your own voice by recording via vits-piper
+https://ssamjh.nz/create-custom-piper-tts-voice/
+
+
+some collections of piper where you can download the correspoinding onnx-json pair by clicking `download`.
+https://rhasspy.github.io/piper-samples/#en_GB-southern_english_female-low
+
 
 ### Installation
 ```
@@ -135,15 +153,14 @@ ASR callbacks (`on_recording_start/stop/transcription_start`) immediately:
 
 ---
 
-FOCUSES
-1. 停止自我循环chat; 
-2. better vocabulary; 
-3. voice style;  
-4. latency; 
-5. speaking style
+## FOCUSES
+1. acoustic echo cancellation; [the hardest shit]
+2. better vocabulary; [doable i think]
+3. voice style; [doable i think]
+(4. speaking style, i not sure if this belongs in the third focus.) 
 
 
-### voiceprint issue
+### voiceprint 
 the folder of voiceprint/ illustrates the voiceprint registration from human throat via recording  vs. from onnx model, and its comparison.
 
 to run them, you need to do:
