@@ -31,22 +31,35 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 `asr_llm_tts.py` – class `VoiceConversationSystem`
 
 ### llm models 
-- Llama-3.2-3B-Instruct-IQ3_M.gguf
+- Llama-3.2-3B-Instruct-IQ3_M.gguf (t'was gud.)
 - llama_3_Base_adult.Q2_K.gguf
 - gemma-3-270m-it-F16.gguf
 - LFM2-1.2B-F16.gguf
+
+                         
+- TinyLlama-1.1B-Chat-v1.0-finetune.f16.gguf
+- TinyLlama-1.1B-Chat-v1.0.Q8_0.gguf
+- TinyLlama-1.1B-Chat-v1.0-finetune.Q2_K.gguf     
+- TinyLlama-1.1B-Chat-v1.0-finetune.Q6_K.gguf     
+- SmallThinker-3B-Preview.Q2_K.gguf               
+- SmallThinker-3B-Preview.Q8_0.gguf               
+- minichat-3b.q2_k.gguf
+- minichat-3b.q8_0.gguf
+
 
 
 #### llm adaptation
 https://chatgpt.com/s/t_68ab14d326648191991a7a411520d4a7
 
 
-
 vocabulary style: via prompt
 
 breath style: i don't know how yet. finetune the tts model??
 
+read style: [Done]
 
+
+----
 
 how to customize your own voice by recording via vits-piper
 https://ssamjh.nz/create-custom-piper-tts-voice/
@@ -91,6 +104,14 @@ Ensure you have:
 
 - Piper ONNX voice model (e.g. `en_US-hfc_female-medium.onnx` as well as `en_US-hfc_female-medium.onnx.json`) placed in repo root (gitignored)
   - e.g. download the model from `https://huggingface.co/csukuangfj/vits-piper-en_US-hfc_female-medium`.
+
+
+#### tts_models
+zh_CN-huayan-medium.onnx
+zh_CN-huayan-medium.onnx.json
+en_US-hfc_female-medium.onnx
+en_US-hfc_female-medium.onnx.json
+
 
 ### Run
 
@@ -151,13 +172,8 @@ ASR callbacks (`on_recording_start/stop/transcription_start`) immediately:
 - WebSocket / browser microphone client integration
 - Automated model download / verification script
 
----
+--------------------------------------------------
 
-## FOCUSES
-1. acoustic echo cancellation; [the hardest shit]
-2. better vocabulary; [doable i think]
-3. voice style; [doable i think]
-(4. speaking style, i not sure if this belongs in the third focus.) 
 
 
 ### voiceprint 
@@ -192,4 +208,12 @@ LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Ca
 
 
 
-
+## FOCUSES
+1. acoustic echo cancellation; [the hardest shit][pending]
+2. better vocabulary; [doable i think]
+  - find an existing gguf
+  - finetune a model with dataset 
+3. voice style; [doable i think]
+  - find an existing onnx model
+  - customize an onnx
+4. combo of llm and tts??
