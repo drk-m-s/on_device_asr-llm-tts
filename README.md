@@ -217,3 +217,17 @@ LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Ca
   - find an existing onnx model
   - customize an onnx
 4. combo of llm and tts??
+
+
+
+
+---- another approach -----
+https://chatgpt.com/share/68abecd7-8a00-800e-b132-7200a128c3eb
+
+ChatTTS
+GPT-SoVITS-WebUI
+CosyVoice
+bark
+OpenVoice
+
+
