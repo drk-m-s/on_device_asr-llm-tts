@@ -7,6 +7,7 @@ Voice Conversation Pipeline (ASR → LLM → TTS)
 - TTS: voice customization
   - https://chatgpt.com/share/68ac3237-f610-800e-8aa2-5e0e49bbe1b4
   - https://chatgpt.com/share/68ad1df3-3b9c-800e-a1dd-eca67c1f10b5
+  - https://chatgpt.com/share/68aeb030-f77c-800e-9b13-43fe48aa1508
   - we can go to finetune/train with piper, and for the materials use openvoice to do it.
 
 
