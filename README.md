@@ -1,8 +1,18 @@
 # Real-Time Voice Conversation System (ASR + LLM + TTS) 
 
-This repository a real‑time demo built on top of `llama.cpp`:
+Voice Conversation Pipeline (ASR → LLM → TTS) 
 
-Voice Conversation Pipeline (ASR → LLM → TTS) with interruption & latency instrumentation
+- ASR：interruption， latency, and echo cancellation
+- LLM: a fine-tuned model with customized vocabulary style
+- TTS: voice customization
+  - https://chatgpt.com/share/68ac3237-f610-800e-8aa2-5e0e49bbe1b4
+  - https://chatgpt.com/share/68ad1df3-3b9c-800e-a1dd-eca67c1f10b5
+  - we can go to finetune/train with piper, and for the materials use openvoice to do it.
+
+
+
+
+
 
 ---
 ## 1. Voice Conversation System
