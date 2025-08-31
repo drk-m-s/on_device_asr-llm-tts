@@ -2,21 +2,23 @@
 
 Voice Conversation Pipeline (ASR → LLM → TTS) 
 
-- ASR：interruption， latency, and echo cancellation
-- LLM: a fine-tuned model with customized vocabulary style
-- TTS: voice customization
-  - https://chatgpt.com/share/68ac3237-f610-800e-8aa2-5e0e49bbe1b4
-  - https://chatgpt.com/share/68ad1df3-3b9c-800e-a1dd-eca67c1f10b5
-  - https://chatgpt.com/share/68aeb030-f77c-800e-9b13-43fe48aa1508
-  - we can go to finetune/train with piper, and for the materials use openvoice to do it.
-
-
-
-
+[ ] ASR：interruption， latency, and echo cancellation
+[ ] LLM: a fine-tuned model with customized vocabulary style
+- [x] a substitute gguf
+- [x] a safetensors to be distilled into gguf.(https://chatgpt.com/share/68b3c412-52b4-800e-8b44-267495c715df)
+- [ ] finetune one (for Mandarin)
+    - [ ] collect one set of dataset
+    - [ ] use one plain llm
+    - [ ] get rid of the nsfw impact
+    - [ ] train/finetune
+    - [ ] export to gguf form.
+[ ] TTS: voice customization 
+  - [ ] use openvoice to copy the assigned voice color to a dataset.
+  - [ ] use PiperVocie to train one. A gpu-intensive task.
 
 
 ---
-## 1. Voice Conversation System
+## 1. ASR
 Low-latency, interruption-aware voice assistant pipeline:
 
 Workflow:
@@ -41,7 +43,7 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 ### Key File
 `asr_llm_tts.py` – class `VoiceConversationSystem`
 
-### llm models 
+### llm models - gguf's
 - Llama-3.2-3B-Instruct-IQ3_M.gguf (t'was gud.)
 - llama_3_Base_adult.Q2_K.gguf
 - gemma-3-270m-it-F16.gguf
@@ -58,6 +60,16 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 - minichat-3b.q8_0.gguf
 
 
+- Qwen2.5_Uncensored_V2_Sexting.gguf (t'was gud.)
+- nsfw-3b-q4_k_m.gguf
+- NSFW-Ameba-3.2-1B.f16.gguf
+- NSFW_13B_sft.Q2_K.gguf
+
+### llm models - safetensors's
+Novaciano/SEX_ROLEPLAY-3.2-1B [gguf'd]
+Novaciano/SENTIMENTAL_SEX-3.2-1B [gguf'd]
+
+
 
 #### llm adaptation
 https://chatgpt.com/s/t_68ab14d326648191991a7a411520d4a7
@@ -65,9 +77,8 @@ https://chatgpt.com/s/t_68ab14d326648191991a7a411520d4a7
 
 vocabulary style: via prompt
 
-breath style: i don't know how yet. finetune the tts model??
+breath/read style: i don't know how yet. finetune the tts model??
 
-read style: [Done]
 
 
 ----
@@ -201,7 +212,7 @@ pip install soundfile
 
 
 ### echo cancellation
-#### approach 0: the vanilla dir --- vanilla/
+#### approach 0: the vanilla dir --- vanilla_PiperVoice/
 
 
 #### approach 1: only take the user's sound as THE input --- voiceprint/
@@ -219,29 +230,6 @@ LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Ca
 
 
 
-## FOCUSES
-1. acoustic echo cancellation; [the hardest shit][pending]
-2. better vocabulary; [doable i think]
-  - find an existing gguf
-  - finetune a model with dataset 
-3. voice style; [doable i think]
-  - find an existing onnx model
-  - customize an onnx
-4. combo of llm and tts??
-
-
-
-
----- another approach -----
-https://chatgpt.com/share/68abecd7-8a00-800e-b132-7200a128c3eb
-
-ChatTTS
-GPT-SoVITS-WebUI
-CosyVoice
-bark
-OpenVoice:  create every new piece of voice and taint it with wanted color. That is a little timely.  i think i should taint every materials to be trained with the color and train a new tts model in onnx.
-
-https://chatgpt.com/share/68ac3237-f610-800e-8aa2-5e0e49bbe1b4
 
 
 

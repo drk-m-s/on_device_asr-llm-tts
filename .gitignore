@@ -48,3 +48,5 @@ node_modules/
 *.bak
 
 *.wav
+*.mp3
+*.aiff
