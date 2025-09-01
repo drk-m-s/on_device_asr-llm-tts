@@ -1,0 +1,14 @@
+https://chatgpt.com/share/68b5551e-8580-800e-b510-12095c974c1f
+
+( i should re-ask this question via gpt-5, instead of gpt-4o.)
+
+
+# LiveKit SDK
+pip install livekit
+pip install livekit-api
+
+# Audio and models
+pip install sounddevice numpy soundfile
+# Install Whisper.cpp / Coqui TTS / LLM offline models
+
+

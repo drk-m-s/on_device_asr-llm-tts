@@ -50,3 +50,5 @@ node_modules/
 *.wav
 *.mp3
 *.aiff
+
+*/ggml-small/*
