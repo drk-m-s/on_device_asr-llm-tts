@@ -15,6 +15,11 @@ Voice Conversation Pipeline (ASR → LLM → TTS)
 [ ] TTS: voice customization 
   - [ ] use openvoice to copy the assigned voice color to a dataset.
   - [ ] use PiperVocie to train one. A gpu-intensive task.
+[ ] if the detected the same thing as the llm output, then ignore it. TBD
+
+
+temp/ is another attempt.
+
 
 
 ---
