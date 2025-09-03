@@ -31,6 +31,10 @@ go build -v -o livekit-server ./cmd/server
 
 https://chatgpt.com/share/68b7effc-2580-800e-bb99-c67afb1ca8f0
 
+better prompt,
+just do the asr_llm_tts normally, first;
+then add echo cancellation, thing.
+
 ---
 ## 1. ASR
 Low-latency, interruption-aware voice assistant pipeline:
