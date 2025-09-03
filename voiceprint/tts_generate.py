@@ -11,7 +11,7 @@ from piper import PiperVoice
 
 # Text to synthesize
 # TEXT = "Hello, this is a five second test sentence for voiceprint comparison."
-TEXT = "Hi, this is another five second test sentence for voiceprint."
+TEXT = "Hi, this is another five second test sentence for voiceprint and its comparison."
 
 
 def resolve_model_path() -> Path:

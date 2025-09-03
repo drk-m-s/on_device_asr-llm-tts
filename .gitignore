@@ -52,3 +52,5 @@ node_modules/
 *.aiff
 
 */ggml-small/*
+
+*/vosk_models/*

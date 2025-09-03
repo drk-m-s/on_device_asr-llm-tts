@@ -15,12 +15,21 @@ Voice Conversation Pipeline (ASR → LLM → TTS)
 [ ] TTS: voice customization 
   - [ ] use openvoice to copy the assigned voice color to a dataset.
   - [ ] use PiperVocie to train one. A gpu-intensive task.
-[ ] if the detected the same thing as the llm output, then ignore it. TBD
+[ ] when heard a voice and starts recording, recognise the source and judge if it is its own. If so, quit the recording.
+  - [ ] require fast voice print generation as well as fast comparison
+  - [ ] extend the recorded wav test to ongoing  test
+
+
 
 
 temp/ is another attempt.
+https://chatgpt.com/share/68b7e7a6-6cb0-800e-9af5-3402967aecb2
+where 
+go build -v -o livekit-server ./cmd/livekit-server 
+is changed to
+go build -v -o livekit-server ./cmd/server
 
-
+https://chatgpt.com/share/68b7effc-2580-800e-bb99-c67afb1ca8f0
 
 ---
 ## 1. ASR
