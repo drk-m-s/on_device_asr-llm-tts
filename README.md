@@ -3,6 +3,13 @@
 Voice Conversation Pipeline (ASR → LLM → TTS) 
 
 [ ] ASR：interruption， latency, and echo cancellation
+in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
+- can it quasi-immediately detect if the audio is from the same voice of voiceprint/tts_ref_0.wav?
+- if so, can it be quickly done?
+- if so, can it quit recordding immediately if it knows it actually from the sound of itself?
+
+
+
 [ ] LLM: a fine-tuned model with customized vocabulary style
 - [x] a substitute gguf
 - [x] a safetensors to be distilled into gguf.(https://chatgpt.com/share/68b3c412-52b4-800e-8b44-267495c715df)
