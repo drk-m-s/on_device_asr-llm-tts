@@ -35,6 +35,11 @@ better prompt,
 just do the asr_llm_tts normally, first;
 then add echo cancellation, thing.
 
+The main idea is to use livekit to wrap up all asr-llm-tts stuff and let gpt-5 and claude-4o to establish a system where:
+- user gets response from chatbox
+- user can interrupt
+- the robot never falls into the loops of answering its own output
+But it seems that the problems (especially the conversation loop one) has no one fixed that publicly. (We stand to be corrected.)
 ---
 ## 1. ASR
 Low-latency, interruption-aware voice assistant pipeline:
