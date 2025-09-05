@@ -29,7 +29,7 @@ in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
 
 
 
-temp/ is another attempt.
+[ ] temp/ is another attempt.
 https://chatgpt.com/share/68b7e7a6-6cb0-800e-9af5-3402967aecb2
 where 
 go build -v -o livekit-server ./cmd/livekit-server 
@@ -47,6 +47,7 @@ The main idea is to use livekit to wrap up all asr-llm-tts stuff and let gpt-5 a
 - user can interrupt
 - the robot never falls into the loops of answering its own output
 But it seems that the problems (especially the conversation loop one) has no one fixed that publicly. (We stand to be corrected.)
+
 ---
 ## 1. ASR
 Low-latency, interruption-aware voice assistant pipeline:
