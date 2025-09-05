@@ -1,14 +1,7 @@
 # Real-Time Voice Conversation System (ASR + LLM + TTS) 
-
 Voice Conversation Pipeline (ASR → LLM → TTS) 
 
 [ ] ASR：interruption， latency, and echo cancellation
-in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
-- can it quasi-immediately detect if the audio is from the same voice of voiceprint/tts_ref_0.wav?
-- if so, can it be quickly done?
-- if so, can it quit recordding immediately if it knows it actually from the sound of itself?
-
-
 
 [ ] LLM: a fine-tuned model with customized vocabulary style
 - [x] a substitute gguf
@@ -19,6 +12,7 @@ in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
     - [ ] get rid of the nsfw impact
     - [ ] train/finetune
     - [ ] export to gguf form.
+
 [ ] TTS: voice customization 
   - [ ] use openvoice to copy the assigned voice color to a dataset.
   - [ ] use PiperVocie to train one. A gpu-intensive task.
@@ -27,26 +21,6 @@ in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
   - [ ] extend the recorded wav test to ongoing  test
 
 
-
-
-[ ] temp/ is another attempt.
-https://chatgpt.com/share/68b7e7a6-6cb0-800e-9af5-3402967aecb2
-where 
-go build -v -o livekit-server ./cmd/livekit-server 
-is changed to
-go build -v -o livekit-server ./cmd/server
-
-https://chatgpt.com/share/68b7effc-2580-800e-bb99-c67afb1ca8f0
-
-better prompt,
-just do the asr_llm_tts normally, first;
-then add echo cancellation, thing.
-
-The main idea is to use livekit to wrap up all asr-llm-tts stuff and let gpt-5 and claude-4o to establish a system where:
-- user gets response from chatbox
-- user can interrupt
-- the robot never falls into the loops of answering its own output
-But it seems that the problems (especially the conversation loop one) has no one fixed that publicly. (We stand to be corrected.)
 
 ---
 ## 1. ASR
@@ -96,10 +70,10 @@ Mic → RealtimeSTT → Prompt Build → llama.cpp /completion (SSE) → Token B
 - NSFW-Ameba-3.2-1B.f16.gguf
 - NSFW_13B_sft.Q2_K.gguf
 
+
 ### llm models - safetensors's
 Novaciano/SEX_ROLEPLAY-3.2-1B [gguf'd]
 Novaciano/SENTIMENTAL_SEX-3.2-1B [gguf'd]
-
 
 
 #### llm adaptation
@@ -109,7 +83,6 @@ https://chatgpt.com/s/t_68ab14d326648191991a7a411520d4a7
 vocabulary style: via prompt
 
 breath/read style: i don't know how yet. finetune the tts model??
-
 
 
 ----
@@ -243,24 +216,46 @@ pip install soundfile
 
 
 ### echo cancellation
-#### approach 0: the vanilla dir --- vanilla_PiperVoice/
-
+#### approach 0: the vanilla dir --- vanilla_PiperVoice/ [focused]
+in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
+- can it quasi-immediately detect if the audio is from the same voice of voiceprint/tts_ref_0.wav?
+- if so, can it be quickly done?
+- if so, can it quit recordding immediately if it knows it actually from the sound of itself?
 
 #### approach 1: only take the user's sound as THE input --- voiceprint/
-
-
 user's sound is pre-recorded in voiceprint/ dir.
 Not successful by far.
 Now， it can know how similar the audio is with the pre-recorded sample wav file.
 But the mute-record-speaker interaction is not sorted out...
 
-#### approach 2: LiveKit + WebRTC AEC (recommended) ---  livekit_appended
+#### approach 2: LiveKit + WebRTC AEC  ---  livekit_appended/
 LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Cancellation (AEC)
 - [x] rewrite the asr_llm_tts.py upon the foundation of WebRTC and LiveKit.
 - [ ] apply AEC then.
 
 
+#### approach 3: LiveKit-based ---  temp/
+temp/ is another attempt.
+- https://chatgpt.com/share/68b7e7a6-6cb0-800e-9af5-3402967aecb2
+- where: 
+  ```
+  go build -v -o livekit-server ./cmd/livekit-server 
+  ```
+is changed to
+  ```
+  go build -v -o livekit-server ./cmd/server
+  ```
 
+https://chatgpt.com/share/68b7effc-2580-800e-bb99-c67afb1ca8f0
 
+better prompt,
+just do the asr_llm_tts normally, first;
+then add echo cancellation, thing.
+
+The main idea is to use livekit to wrap up all asr-llm-tts stuff and let gpt-5 and claude-4o to establish a system where:
+- user gets response from chatbox
+- user can interrupt
+- the robot never falls into the loops of answering its own output
+But it seems that the problems (especially the conversation loop one) has no one fixed that publicly. (We stand to be corrected.)
 
 
