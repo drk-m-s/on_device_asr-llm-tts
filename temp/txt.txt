@@ -1,0 +1,9 @@
+
+
+echo "Hello world" | piper --model /Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/tts_models/en_US-hfc_female-medium.onnx --output-file out.wav
+
+
+
+export LIVEKIT_URL="ws://127.0.0.1:7880" 
+export LIVEKIT_TOKEN=$(python token_gen.py)   # this prints the JWT
+python voice_agent.py

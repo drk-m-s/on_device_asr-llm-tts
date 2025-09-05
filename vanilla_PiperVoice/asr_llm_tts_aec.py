@@ -34,7 +34,8 @@ class VoiceConversationSystemAEC(LLMTTSStreamer):
                  history_trim_threshold=12,
                 #  aec_similarity_threshold=0.6,
                  aec_similarity_threshold=0.5,
-                 aec_tail_seconds=0.6):
+                 aec_tail_seconds=0.6,
+                 conversation_style=None):
         """
         Initialize the complete voice conversation system with echo suppression.
 
@@ -47,9 +48,10 @@ class VoiceConversationSystemAEC(LLMTTSStreamer):
             history_trim_threshold: Maximum number of history entries to keep
             aec_similarity_threshold: If ASR text is this similar to current TTS text, drop it as echo
             aec_tail_seconds: Keep echo-guard active for this many seconds after last TTS chunk enqueue
+            conversation_style: Optional ConversationStyle for enhanced natural conversation
         """
         # Initialize parent class first
-        super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path)
+        super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path, conversation_style=conversation_style)
 
         # ASR-specific configuration
         self.enable_history_summarization = enable_history_summarization
@@ -366,15 +368,38 @@ def main():
                         help="Path to Piper TTS model")
     parser.add_argument("--asr-model", type=str, default="tiny",
                         help="ASR model size (tiny, base, small, medium, large) or path to local model file")
+    parser.add_argument("--conversation-style", type=str, choices=["casual", "professional", "friendly", "technical"],
+                        default="friendly", help="Conversation style for enhanced natural speech (default: friendly)")
+    parser.add_argument("--disable-enhancements", action="store_true",
+                        help="Disable conversation enhancements (use original behavior)")
     parser.add_argument("--test", action="store_true", help="Test all components")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     args = parser.parse_args()
+
+    # Determine conversation style
+    conversation_style = None
+    if not args.disable_enhancements:
+        from llm_tts import ConversationStyle, VocabularyStyle
+        style_map = {
+            "casual": VocabularyStyle.CASUAL,
+            "professional": VocabularyStyle.PROFESSIONAL,
+            "friendly": VocabularyStyle.FRIENDLY,
+            "technical": VocabularyStyle.TECHNICAL
+        }
+        conversation_style = ConversationStyle(
+            vocabulary_style=style_map[args.conversation_style],
+            personality_traits=["helpful", "engaging"]
+        )
+        print(f"🎭 Enhanced conversation mode: {args.conversation_style}")
+    else:
+        print("🔧 Using original conversation behavior")
 
     try:
         system = VoiceConversationSystemAEC(
             llm_server_url=args.llm_url,
             tts_model_path=args.tts_model,
-            asr_model=args.asr_model
+            asr_model=args.asr_model,
+            conversation_style=conversation_style
         )
         if args.test_tts:
             test_text = ("Hello! This is a test of the voice conversation system with echo suppression. "

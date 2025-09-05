@@ -48,3 +48,9 @@ node_modules/
 *.bak
 
 *.wav
+*.mp3
+*.aiff
+
+*/ggml-small/*
+
+*/vosk_models/*

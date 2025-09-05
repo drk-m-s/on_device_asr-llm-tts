@@ -1,0 +1,1 @@
+pip install aiohttp websockets vosk soundfile numpy requests aiofiles
