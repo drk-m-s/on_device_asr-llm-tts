@@ -140,7 +140,6 @@ en_US-hfc_female-medium.onnx.json
 
 
 ### Run
-
 ```
 python asr_llm_tts.py --llm-url http://localhost:8080 --tts-model en_US-hfc_female-medium.onnx
 ```
@@ -157,7 +156,7 @@ pip install sounddevice
 Make sure the `numpy` used is of version less than 2.0.
 
 
-
+------------------------------------------------------------
 ### Latency Metrics Printed
 ```
 build_prompt
