@@ -214,12 +214,61 @@ pip install soundfile
 - `voiceprint_compare.py` is how to compare the voiceprint between wav files.
 
 
-### echo cancellation
+### acoustic echo cancellation （AEC）
+The technique that makes the chatting robot never answers its own output on speaker the approach of acoustic is echo canclellation.
+The problem of a chat robot "answering its own output" when it plays audio through a speaker and simultaneously listens with a microphone is essentially acoustic echo. 
+The solution is Acoustic Echo Cancellation (AEC), which is a DSP (digital signal processing) technique that removes the echo of the loudspeaker’s signal from the microphone’s input.
+
+There are several mature, open-sourced implementations:
+#### WebRTC AEC
+The WebRTC project (by Google) has a state-of-the-art echo canceller (AEC, AEC2, and AEC3). It’s widely regarded as one of the best open-source AEC solutions.
+
+Libraries:
+- webrtcvad (Python, though mainly for VAD)
+- py-webrtc-audio-processing (Python wrapper around WebRTC’s AEC, NS, AGC, etc.)
+- C++ version is built into the WebRTC stack.
+
+#### SpeexDSP
+Part of the Speex project. Provides a simpler echo canceller (less advanced than WebRTC AEC). Easier to integrate in lightweight systems (e.g., embedded).
+
+#### Pulseaudio / PipeWire echo cancellation
+Linux audio servers like PulseAudio and PipeWire have built-in echo cancellation modules. For example:
+```bash
+pactl load-module module-echo-cancel
+```
+They use either Speex or WebRTC AEC internally.
+
+#### Deep learning based AEC (research)
+Some newer approaches use neural nets, e.g., AdenoNet, NSNet2, etc. These are not as mature for real-time embedded use, but available in research repos.
+
 #### approach 0: the vanilla dir --- vanilla_PiperVoice/ [focused]
-in vanilla_PiperVoice, modify asr_llm_tts.py STEP by STEP:
-- can it quasi-immediately detect if the audio is from the same voice of voiceprint/tts_ref_0.wav?
-- if so, can it be quickly done?
-- if so, can it quit recordding immediately if it knows it actually from the sound of itself?
+in vanilla_PiperVoice, modify asr_llm_tts.py :
+GPT-5 says ----
+
+Since you’re in Python, you can wrap an AEC engine:
+- py-webrtc-audio-processing
+Provides bindings for WebRTC AEC, noise suppression, gain control, etc.
+Best quality for real-time robot applications.
+- pyaudio + WebRTC AEC (lower-level integration).
+- If running Linux desktop → you can rely on PulseAudio/ PipeWire to do AEC system-wide (simpler, but less portable).
+
+
+
+Patch asr_llm_tts.py:
+- Initialize WebRTC AEC.
+- Keep a buffer of the last TTS audio (the same waveform you play).
+- Before sending mic audio to ASR, run AEC: subtract reference speaker audio from mic input.
+
+Update llm_tts.py so that it can either:
+- Just play the generated TTS (as before), or
+- Return the raw audio buffer for use in AEC.
+
+```zsh
+brew install portaudio
+pip install sounddevice numpy py-webrtc-audio-processing
+
+```
+
 
 #### approach 1: only take the user's sound as THE input --- voiceprint/
 user's sound is pre-recorded in voiceprint/ dir.
@@ -231,7 +280,6 @@ But the mute-record-speaker interaction is not sorted out...
 LiveKit is built on top of WebRTC, and WebRTC has battle-tested Acoustic Echo Cancellation (AEC)
 - [x] rewrite the asr_llm_tts.py upon the foundation of WebRTC and LiveKit.
 - [ ] apply AEC then.
-
 
 #### approach 3: LiveKit-based ---  temp/
 temp/ is another attempt.
