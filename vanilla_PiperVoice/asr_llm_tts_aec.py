@@ -1,6 +1,5 @@
-"""Complete ASR-LLM-TTS Voice Conversation System
-Listens to user speech, processes it through LLM, and responds with synthesized speech.
-Supports interruption: user can speak while AI is talking to interrupt it.
+"""Complete ASR-LLM-TTS Voice Conversation System with MPS-accelerated Similarity Filtering
+Ignores audio that sounds like the reference WAV file, otherwise processes normally.
 """
 
 # Suppress warnings from dependencies
@@ -12,6 +11,9 @@ warnings.filterwarnings("ignore", message=".*compute type inferred.*", module="c
 import threading
 import time
 import queue
+import numpy as np
+import torch
+import torchaudio
 
 # ASR library
 from RealtimeSTT import AudioToTextRecorder
@@ -20,40 +22,38 @@ from RealtimeSTT import AudioToTextRecorder
 from llm_tts import LLMTTSStreamer
 
 class VoiceConversationSystem(LLMTTSStreamer):
-    """Voice conversation system that inherits LLM-TTS functionality."""
+    """Voice conversation system that inherits LLM-TTS functionality with MPS similarity filter."""
     
     def __init__(self, llm_server_url=None, tts_model_path=None,
                  asr_model="tiny",
                  enable_history_summarization=True,
                  summarize_after_turns=10,
                  history_trim_threshold=12,
-                 conversation_style=None):
+                 conversation_style=None,
+                 reference_wav="/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/voiceprint/tts_ref_0.wav",
+                 similarity_threshold=0.85):
         """
-        Initialize the complete voice conversation system.
-        
-        Args:
-            llm_server_url: URL of the LLM server (default: http://localhost:8080)
-            tts_model_path: Path to the TTS model file
-            asr_model: Fast_Whisper ASR model size ('tiny', 'base', 'small', 'medium', 'large')
-            enable_history_summarization: Whether to summarize older turns to shrink prompt
-            summarize_after_turns: Number of turns after which to summarize
-            history_trim_threshold: Maximum number of history entries to keep
-            conversation_style: Optional ConversationStyle for enhanced natural conversation
+        Initialize the voice conversation system.
         """
-        # Initialize parent class first
         super().__init__(llm_server_url=llm_server_url, tts_model_path=tts_model_path, conversation_style=conversation_style)
         
-        # ASR-specific configuration
         self.enable_history_summarization = enable_history_summarization
         self.summarize_after_turns = summarize_after_turns
         self.history_trim_threshold = history_trim_threshold
-        
-        # Initialize ASR with proper callback handling
+
+        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        print(f"Using device for similarity computation: {self.device}")
+
+        # Embed reference WAV once on MPS
+        self.similarity_threshold = similarity_threshold
+        self.reference_embedding = self._embed_reference_audio(reference_wav).to(self.device)
+        print(f"Reference audio embedded for similarity check: {reference_wav}")
+
+        # ASR initialization
         print(f"Loading ASR model: {asr_model}")
         self.asr_recorder = AudioToTextRecorder(
             model=asr_model,
             enable_realtime_transcription=True,
-            # silero_sensitivity=0.3, # - 0.0 : Least sensitive (requires very clear, loud speech to trigger detection)- 1.0 : Most sensitive (may trigger on background noise or very quiet sounds) - Default : 0.6
             silero_sensitivity=0.0,
             silero_use_onnx=True,
             post_speech_silence_duration=0.5,
@@ -64,71 +64,74 @@ class VoiceConversationSystem(LLMTTSStreamer):
         )
         print("ASR model loaded and ready")
         
-        # ASR-specific conversation control
         self.conversation_active = False
-        
-        # TTS interruption control
         self.interrupt_tts = threading.Event()
         self.user_speaking = threading.Event()
         self.ai_should_be_quiet = threading.Event()
-        
-        # Conversation history
         self.conversation_history = []
-        
 
-    def _on_recording_start(self, *args, **kwargs):
-        """Callback when user starts speaking - interrupt TTS immediately."""
+    # --------------------- Reference audio embedding ---------------------
+    def _embed_reference_audio(self, wav_path):
+        """Load WAV and compute a fixed-size embedding using MFCCs."""
+        waveform, sr = torchaudio.load(wav_path)
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(0, keepdim=True)  # Convert to mono
+        if sr != 16000:
+            resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
+            waveform = resampler(waveform)
+        mfcc = torchaudio.transforms.MFCC(
+            sample_rate=16000, n_mfcc=20, melkwargs={"n_fft":400, "hop_length":160, "n_mels":23}
+        )(waveform)
+        embedding = mfcc.mean(dim=2).squeeze()
+        return embedding
+
+    def _is_similar_to_reference(self, waveform, sr):
+        """Check similarity between incoming audio and reference embedding using MPS."""
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(0, keepdim=True)
+        if sr != 16000:
+            resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
+            waveform = resampler(waveform)
+        mfcc = torchaudio.transforms.MFCC(
+            sample_rate=16000, n_mfcc=20, melkwargs={"n_fft":400, "hop_length":160, "n_mels":23}
+        )(waveform)
+        emb = mfcc.mean(dim=2).squeeze().to(self.device)
+        cos_sim = torch.nn.functional.cosine_similarity(emb, self.reference_embedding, dim=0).item()
+        if cos_sim >= self.similarity_threshold:
+            print("🔍 Detected: similar (ignored)")
+            return True
+        else:
+            print("🔍 Detected: not similar (processed)")
+            return False
+
+    # --------------------- ASR callbacks ---------------------
+    def _on_recording_start(self, audio_chunk=None, sample_rate=None, **kwargs):
+        """Callback when user starts speaking - check similarity first."""
+        if audio_chunk is not None:
+            if self._is_similar_to_reference(torch.tensor(audio_chunk).unsqueeze(0), sample_rate):
+                return  # Ignore similar audio
         print("\n🎤 User started speaking...")
-        
-        # Increment generation so any ongoing LLM/TTS becomes stale
         if hasattr(self, 'stream_generation'):
             self.stream_generation += 1
-        
-        # Set user speaking flag immediately
         self.user_speaking.set()
         self.ai_should_be_quiet.set()
-        
-        # Interrupt any ongoing TTS immediately
-        print("⏹️ Interrupting AI speech immediately!")
         self.interrupt_tts_immediately()
 
     def _on_recording_stop(self, *args, **kwargs):
-        """Callback when user stops speaking."""
         print("🎤 User stopped speaking")
-        
-        # Allow TTS to resume now that user stopped speaking
         self.interrupt_tts.clear()
         self.user_speaking.clear()
-        
-        # Keep AI quiet for a short moment to ensure clean transition
         threading.Timer(0.5, self.ai_should_be_quiet.clear).start()
 
     def _on_transcription_start(self, *args, **kwargs):
-        """Callback when transcription starts."""
         print("📝 Transcription starting...")
-        
-        # Briefly prevent new speech to avoid overlap, then allow
         self.ai_should_be_quiet.set()
         threading.Timer(0.3, self.ai_should_be_quiet.clear).start()
 
     def interrupt_tts_immediately(self):
-        """Signal immediate interruption; parent audio worker will handle stopping and clearing."""
         print("🚨 EMERGENCY STOP: Interrupting TTS output NOW!")
         self.interrupt_tts.set()
 
-    def stream_tts_async(self, text, expected_generation=None):
-        """
-        Delegate to parent async TTS for playback.
-        
-        Args:
-            text: Text to synthesize
-            expected_generation: Generation number for cancellation
-        """
-        if not text.strip():
-            return
-        
-        # Delegate to parent implementation
-        super().stream_tts_async(text, expected_generation)
 
     def _summarize_history(self):
         """
@@ -324,26 +327,22 @@ class VoiceConversationSystem(LLMTTSStreamer):
 
 
 def main():
-    """Main function to run the voice conversation system."""
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Voice Conversation System (ASR-LLM-TTS)")
+    parser = argparse.ArgumentParser(description="Voice Conversation System (ASR-LLM-TTS) with similarity filter")
     parser.add_argument("--llm-url", type=str, default="http://localhost:8080",
-                       help="URL of the llama-server (default: http://localhost:8080)")
+                        help="URL of the llama-server (default: http://localhost:8080)")
     parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx",
-                       help="Path to Piper TTS model")
+                        help="Path to Piper TTS model")
     parser.add_argument("--asr-model", type=str, default="tiny",
-                       help="ASR model size (tiny, base, small, medium, large) or path to local model file")
+                        help="ASR model size (tiny, base, small, medium, large) or path to local model file")
     parser.add_argument("--conversation-style", type=str, choices=["casual", "professional", "friendly", "technical"],
-                       default="friendly", help="Conversation style for enhanced natural speech (default: friendly)")
+                        default="friendly", help="Conversation style for enhanced natural speech (default: friendly)")
     parser.add_argument("--disable-enhancements", action="store_true",
-                       help="Disable conversation enhancements (use original behavior)")
+                        help="Disable conversation enhancements (use original behavior)")
     parser.add_argument("--test", action="store_true", help="Test all components")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
-    
     args = parser.parse_args()
-    
-    # Determine conversation style
+
     conversation_style = None
     if not args.disable_enhancements:
         from llm_tts import ConversationStyle, VocabularyStyle
@@ -360,8 +359,7 @@ def main():
         print(f"🎭 Enhanced conversation mode: {args.conversation_style}")
     else:
         print("🔧 Using original conversation behavior")
-    
-    # Initialize the voice conversation system
+
     try:
         system = VoiceConversationSystem(
             llm_server_url=args.llm_url,
@@ -371,16 +369,11 @@ def main():
         )
         
         if args.test_tts:
-            # Test TTS only
-            test_text = ("Hello! This is a test of the voice conversation system. "
-                        "The text-to-speech is working correctly. Try speaking to interrupt this message.")
-            system.stream_tts_async(test_text)
+            system.stream_tts_async("Testing TTS only. Speak to interrupt.")
             time.sleep(3)
         elif args.test:
-            # Test all components
             system.test_components()
         else:
-            # Start voice conversation
             system.start_voice_conversation()
             
     except KeyboardInterrupt:

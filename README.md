@@ -252,22 +252,41 @@ Best quality for real-time robot applications.
 - pyaudio + WebRTC AEC (lower-level integration).
 - If running Linux desktop → you can rely on PulseAudio/ PipeWire to do AEC system-wide (simpler, but less portable).
 
+Keep a short buffer of TTS samples being played. Or an external wav file of audio sample.
+
+Since the output sound is changing via selecting different tts model, the way to contrl 'echo cancellation' should be within software realm instead of hardware realm, as far as I am concerned.
+
+The problem is relevant with asr, that's fo' sho'.
 
 
-Patch asr_llm_tts.py:
-- Initialize WebRTC AEC.
-- Keep a buffer of the last TTS audio (the same waveform you play).
-- Before sending mic audio to ASR, run AEC: subtract reference speaker audio from mic input.
+my prompt given to chatgpt:
+```text
+suppose i have a wav file (/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/voiceprint/tts_ref_0.wav) which is a 5-second sound sample of the output. Please modify the script so that, when it listens to any audio , it does not immediately send it to subsequent llm and tts models, but detect if it is similar to the wav file: if so, just ignore that like nothing happens; if not, do the interrupttion.for every detection/judement, print out if it is 'simillar' or 'not similar', so i can see if it works. I need a full complete updated scripts: 
+(asr_llm_tts.py) ``; and (llm_tts.py) `` 
+```
 
-Update llm_tts.py so that it can either:
-- Just play the generated TTS (as before), or
-- Return the raw audio buffer for use in AEC.
+```text
+suppose i have a wav file (/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/voiceprint/tts_ref_0.wav) which is a 5-second sound sample of the output. Please modify my following script so that, when it listens to any audio, it does not immediately send it to subsequent llm and tts models, but detect every chunk if it is similar to the wav file: if yes, just ignore ; if not, do the interrupttion.for every detection/judement, print out if it is 'simillar' or 'not similar', so i can see if it works. Speed is prior to accuracy, and make the similarity check robust. I need a full complete update of my script: `` 
+```
+
+
+
 
 ```zsh
 brew install portaudio
 pip install sounddevice numpy py-webrtc-audio-processing
-
+pip install pyobjc
+pip install pyannote.audio torchaudio librosa
+pip install python_speech_features
 ```
+
+
+
+
+
+
+
+
 
 
 #### approach 1: only take the user's sound as THE input --- voiceprint/
