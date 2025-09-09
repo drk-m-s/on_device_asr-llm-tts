@@ -269,7 +269,11 @@ suppose i have a wav file (/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts
 suppose i have a wav file (/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/voiceprint/tts_ref_0.wav) which is a 5-second sound sample of the output. Please modify my following script so that, when it listens to any audio, it does not immediately send it to subsequent llm and tts models, but detect every chunk if it is similar to the wav file: if yes, just ignore ; if not, do the interrupttion.for every detection/judement, print out if it is 'simillar' or 'not similar', so i can see if it works. Speed is prior to accuracy, and make the similarity check robust. I need a full complete update of my script: `` 
 ```
 
+```text
+suppose i have a wav file (/Users/shuyuew/Documents/GitHub/on_device_asr-llm-tts/voiceprint/tts_ref_0.wav) which is a 5-second sound sample of the output. Please write a new script so that, when it listens to any audio, 
 
+it detects every chunk if it is similar to the wav file: if yes, just ignore ; if not,  print out if it is 'simillar' or 'not similar', send to my following script: `` 
+```
 
 
 ```zsh
