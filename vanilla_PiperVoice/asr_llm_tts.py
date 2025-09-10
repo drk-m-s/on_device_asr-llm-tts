@@ -343,11 +343,11 @@ def main():
         style_map = {
             "casual": VocabularyStyle.CASUAL,
             "professional": VocabularyStyle.PROFESSIONAL,
-            "friendly": VocabularyStyle.FRIENDLY,
-            "technical": VocabularyStyle.TECHNICAL
+            "friendly": VocabularyStyle.ENTHUSIASTIC,
+            "technical": VocabularyStyle.THOUGHTFUL
         }
         conversation_style = ConversationStyle(
-            vocabulary_style=style_map[args.conversation_style],
+            vocabulary=style_map[args.conversation_style],
             personality_traits=["helpful", "engaging"]
         )
         print(f"🎭 Enhanced conversation mode: {args.conversation_style}")
