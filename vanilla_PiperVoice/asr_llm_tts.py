@@ -3,12 +3,6 @@ Listens to user speech, processes it through LLM, and responds with synthesized 
 Supports interruption: user can speak while AI is talking to interrupt it.
 """
 
-# Suppress warnings from dependencies
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="webrtcvad")
-warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
-warnings.filterwarnings("ignore", message=".*compute type inferred.*", module="ctranslate2")
-
 import threading
 import time
 import queue
@@ -53,8 +47,7 @@ class VoiceConversationSystem(LLMTTSStreamer):
         self.asr_recorder = AudioToTextRecorder(
             model=asr_model,
             enable_realtime_transcription=True,
-            # silero_sensitivity=0.3, # - 0.0 : Least sensitive (requires very clear, loud speech to trigger detection)- 1.0 : Most sensitive (may trigger on background noise or very quiet sounds) - Default : 0.6
-            silero_sensitivity=0.0,
+            silero_sensitivity=0.3,
             silero_use_onnx=True,
             post_speech_silence_duration=0.5,
             language="en",
