@@ -29,6 +29,16 @@ import random
 from piper import PiperVoice
 
 
+# Read file content directly into a global variable
+try:
+    with open('prompt_materials_1.txt', 'r') as file: 
+    # with open('prompt_materials_0.txt', 'r') as file: 
+        PROMPT_MATERIALS = file.read()
+except FileNotFoundError:
+    PROMPT_MATERIALS = ""  # Default value if file doesn't exist
+    print("File not found!")
+
+
 class VocabularyStyle(Enum):
     """Different vocabulary and tone styles."""
     CASUAL = "casual"  # Informal, friendly, uses contractions
@@ -200,38 +210,8 @@ class LLMTTSStreamer:
             "long": "Give comprehensive responses when appropriate."
         }
         
-#         enhanced_prompt = f"""{base_prompt}
-        
-# Personality: You are {personality} chatter.
-        
-# Communication Style: {vocab_instructions[style.vocabulary]}
-        
-# Response Length: {length_guidance[style.response_length]}
-        
-# Natural Speech: Use natural speech patterns including occasional hesitations and filler words when appropriate.
 
-# - Use natural, conversational language
-# - Spell out numbers, dates, and abbreviations as they should be spoken
-# - Use "and" instead of "&"
-# - Convert symbols to words (% becomes "percent", @ becomes "at")
-# - Use complete sentences that flow naturally when spoken
-# - Avoid complex punctuation that doesn't translate to speech
-# - Keep responses clear and direct for audio consumption
-
-# - Never include asterisks (*), brackets [], parentheses (), or any formatting symbols
-# - Never include index numbers, citations, or reference markers
-# - Never include stage directions, annotations, or meta-commentary
-# - Never include markup like bold, italics, or bullet points
-# - Never include "Note:", "PS:", or similar written conventions
-# - Avoid spelling out punctuation or formatting cues
-# - Write everything as if speaking directly to the listener 
-# """
-
-
-        enhanced_prompt = f"""You are a seductive sex chatter. You are {personality}, with {vocab_instructions[style.vocabulary]} vocabulary. Use natural chatting patterns including occasional hesitations. Use seductive vocabulary. You are a girl from California, aged 19 years old. Don't be shy. 
-
-{base_prompt}
-"""
+        enhanced_prompt = f"""You are a {personality} chatter, with {vocab_instructions[style.vocabulary]} vocabulary. You tend to give {length_guidance[style.response_length]} answers. {PROMPT_MATERIALS}"""
         
         return enhanced_prompt
 
