@@ -31,8 +31,7 @@ from piper import PiperVoice
 
 # Read file content directly into a global variable
 try:
-    with open('prompt_materials_1.txt', 'r') as file: 
-    # with open('prompt_materials_0.txt', 'r') as file: 
+    with open('prompt_materials_jingzhi.txt', 'r') as file: 
         PROMPT_MATERIALS = file.read()
 except FileNotFoundError:
     PROMPT_MATERIALS = ""  # Default value if file doesn't exist
@@ -170,19 +169,76 @@ class LLMTTSStreamer:
         except:
             pass
 
-    def _test_llm_server(self):
-        """Test if the LLM server is accessible with optimized connection."""
+
+    def _query_llm(self, user_text: str) -> str:
+        """Send user text to LLM server and return extracted response."""
+        import requests
+        url = "https://algorithms-test.jingzhi-sh.com/system-rag-agent/graphs/chat/completions"
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": user_text
+                }
+            ],
+            "temperature": 0.7,
+            "model": "qwen2.5-instruct",
+            "max_tokens": 0,
+            "stream": False,
+            "conversation_id": "1",
+            "graph": "aps_graph",
+            "token": "123",
+            "tools": [
+                "refresh_scheduling",
+                "place_new_order",
+                "arrange_certain_tasks",
+                "search_certain_inventory",
+                "search_local_knowledgebase",
+                "text2sql_new",
+                "search_raw_inventory"
+            ]
+        }
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
         try:
-            with httpx.Client(timeout=1.0) as client:
-                response = client.get(f"{self.llm_server_url}/health")
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("choices", [{}])[0].get("content", "")
+        except Exception as e:
+            print(f"[LLM ERROR] {e}")
+            return ""
+
+
+    def _test_llm_server(self):
+        """Test if the API server is accessible."""
+        try:
+            url = "https://algorithms-test.jingzhi-sh.com/system-rag-agent/graphs/chat/completions"
+            payload = {
+                "messages": [{"role": "user", "content": "test"}],
+                "temperature": 0.7,
+                "model": "qwen2.5-instruct",
+                "max_tokens": 10,
+                "stream": False,
+                # "conversation_id": "1",
+                "conversation_id": "141",
+                "graph": "aps_graph",
+                "token": "123",
+                "tools": ["search_local_knowledgebase"]
+            }
+            headers = {
+                "accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            
+            with httpx.Client(timeout=5.0) as client:
+                response = client.post(url, json=payload, headers=headers)
                 return response.status_code == 200
         except:
-            try:
-                with httpx.Client(timeout=1.0) as client:
-                    response = client.get(f"{self.llm_server_url}/v1/models")
-                    return response.status_code == 200
-            except:
-                return False
+            return False
 
     def _build_system_prompt(self, base_prompt="You are a helpful AI assistant."):
         """Build enhanced system prompt based on conversation style."""
@@ -211,8 +267,8 @@ class LLMTTSStreamer:
         }
         
 
-        enhanced_prompt = f"""You are a {personality} chatter, with {vocab_instructions[style.vocabulary]} vocabulary. You tend to give {length_guidance[style.response_length]} answers. {PROMPT_MATERIALS}"""
-        
+        # enhanced_prompt = f"""You are a {personality} chatter, with {vocab_instructions[style.vocabulary]} vocabulary. You tend to give {length_guidance[style.response_length]} answers. {PROMPT_MATERIALS}"""
+        enhanced_prompt = f"""{base_prompt}"""
         return enhanced_prompt
 
     def _enhance_response_naturalness(self, response_text):
@@ -361,7 +417,7 @@ class LLMTTSStreamer:
                         pass
                     
                     if cleared > 0:
-                        print(f"🗑️ Audio worker cleared {cleared} chunks")
+                        print(f"ðŸ—‘ï¸ Audio worker cleared {cleared} chunks")
                     
                     # Stop any active audio output
                     if platform.system() == 'Darwin' and hasattr(self, 'audio_output_active') and self.audio_output_active:
@@ -492,11 +548,7 @@ class LLMTTSStreamer:
             self.tts_executor.submit(self.stream_tts_async, text, self.stream_generation)
 
     def stream_llm_response_ultra_optimized(self, prompt, max_tokens=512, expected_generation=None):
-        """Ultra-optimized LLM response streaming with cancellation support and enhanced conversation."""
-        if not self.llm_available:
-            print("LLM server not available!")
-            return ""
-        
+        """Ultra-optimized LLM response streaming with your custom API endpoint."""
         # Capture the generation this stream belongs to
         local_gen = self.stream_generation if expected_generation is None else expected_generation
         
@@ -505,37 +557,73 @@ class LLMTTSStreamer:
         
         start_time = time.perf_counter()
         first_token_time = None
-        token_count = 0
         
+        # Use your custom API endpoint with streaming support
+        url = "https://algorithms-test.jingzhi-sh.com/system-rag-agent/graphs/chat/completions"
         payload = {
-            "prompt": enhanced_prompt,
-            "max_tokens": max_tokens,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": enhanced_prompt
+                }
+            ],
             "temperature": 0.7,
-            "top_p": 0.9,
-            "repeat_penalty": 1.1,
-            "stream": True,
-            "stop": ["Human:", "Assistant:", "\n\n"]
+            "model": "qwen2.5-instruct",
+            "max_tokens": max_tokens if max_tokens > 0 else 512,
+            "stream": True,  # Enable streaming
+            "conversation_id": "1",
+            "graph": "aps_graph",
+            "token": "123",
+            "tools": [
+                "refresh_scheduling",
+                "place_new_order", 
+                "arrange_certain_tasks",
+                "search_certain_inventory",
+                "search_local_knowledgebase",
+                "text2sql_new",
+                "search_raw_inventory"
+            ]
+        }
+        
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json"
         }
         
         response_text = ""
         text_buffer = ""
-        
-        data_prefix = 'data: '
-        done_marker = '[DONE]'
-        
+        token_count = 0
         aborted = False
         
         try:
-            # Use raw bytes processing for maximum speed
-            with self.session.stream("POST", self.completion_url, json=payload) as response:
-
+            # Use streaming request to your API
+            with self.session.stream("POST", url, json=payload, headers=headers) as response:
                 if response.status_code != 200:
-                    print(f"Error from LLM server: {response.status_code}")
-                    return ""
+                    print(f"Error from API server: {response.status_code}")
+                    # Fallback to non-streaming if streaming fails
+                    try:
+                        fallback_payload = payload.copy()
+                        fallback_payload["stream"] = False
+                        resp = self.session.post(url, json=fallback_payload, headers=headers)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        response_text = data.get("choices", [{}])[0].get("content", "")
+                        
+                        if response_text:
+                            print("Assistant: ", end="", flush=True)
+                            print(response_text)
+                            # Apply naturalness enhancement if conversation style is enabled
+                            enhanced_text = self._enhance_response_naturalness(response_text)
+                            self.stream_tts(enhanced_text)
+                        
+                        return response_text
+                    except Exception as fallback_error:
+                        print(f"Fallback request also failed: {fallback_error}")
+                        return ""
                 
-                # Ultra-fast streaming with minimal overhead
+                # Process streaming response
                 buffer = b""
-                for chunk in response.iter_bytes(chunk_size=4096):  # Larger chunks for efficiency
+                for chunk in response.iter_bytes(chunk_size=4096):
                     # Abort immediately if interrupted, user is speaking, or generation changed
                     if ((hasattr(self, 'interrupt_tts') and self.interrupt_tts.is_set()) or
                         (hasattr(self, 'user_speaking') and self.user_speaking.is_set()) or
@@ -564,27 +652,32 @@ class LLMTTSStreamer:
                         except:
                             continue
 
-                        if not line.startswith(data_prefix):
+                        # Handle different streaming formats
+                        data_str = ""
+                        if line.startswith('data: '):
+                            data_str = line[6:]  # Remove 'data: ' prefix
+                        elif line.startswith('{') and line.endswith('}'):
+                            data_str = line  # Direct JSON format
+                        else:
                             continue
 
-                        data_str = line[6:]  # Remove 'data: ' prefix
-                        if data_str == done_marker:
+                        if data_str in ['[DONE]', 'data: [DONE]']:
                             break
 
                         try:
-                            # Ultra-fast JSON parsing with minimal error checking
+                            # Parse JSON response
                             data = json.loads(data_str)
 
-                            # Extract token with absolute minimal checks
+                            # Extract content from your API response format
                             token = None
-                            if 'content' in data:
-                                token = data['content']
-                            elif 'choices' in data and data['choices']:
+                            if 'choices' in data and data['choices']:
                                 choice = data['choices'][0]
-                                if 'text' in choice:
-                                    token = choice['text']
+                                if 'content' in choice:
+                                    token = choice['content']
                                 elif 'delta' in choice and choice['delta'] and 'content' in choice['delta']:
                                     token = choice['delta']['content']
+                            elif 'content' in data:
+                                token = data['content']
 
                             if not token:
                                 continue
@@ -594,14 +687,14 @@ class LLMTTSStreamer:
                                 first_token_time = time.perf_counter()
                                 latency_ms = (first_token_time - start_time) * 1000
                                 print(f"\n[TIMING] First token latency: {latency_ms:.1f}ms")
-                                print("LLM Response: ", end="", flush=True)
+                                print("Assistant: ", end="", flush=True)
 
                             print(token, end="", flush=True)
                             response_text += token
                             text_buffer += token
                             token_count += 1
                             
-                            # Ultra-fast sentence detection
+                            # Ultra-fast sentence detection for TTS
                             if (('.' in token or '!' in token or '?' in token or '\n' in token) 
                                 and len(text_buffer.strip()) > 10):
                                 # Submit to TTS immediately without blocking, unless interrupted or generation changed
@@ -631,7 +724,7 @@ class LLMTTSStreamer:
             
             # If aborted due to interruption, stop early
             if aborted:
-                print("\n⏹️ LLM response interrupted by user.")
+                print("\n✹️ LLM response interrupted by user.")
                 return response_text
             
             # Calculate performance metrics
@@ -645,7 +738,7 @@ class LLMTTSStreamer:
             return response_text
 
         except Exception as e:
-            print(f"Error connecting to LLM server: {e}")
+            print(f"Error connecting to API server: {e}")
             return ""
 
     def chat_loop(self):
@@ -772,7 +865,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Local LLM to TTS Streamer with Enhanced Conversation")
     parser.add_argument("--llm-url", type=str, default="http://localhost:8080", help="URL of the llama-server (default: http://localhost:8080)")
-    parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
+    # parser.add_argument("--tts-model", type=str, default="../tts_models/en_US-hfc_female-medium.onnx", help="Path to Piper TTS model")
+    parser.add_argument("--tts-model", type=str, default="../tts_models/zh_CN-huayan-medium.onnx", help="Path to Piper TTS model")
     parser.add_argument("--test-tts", action="store_true", help="Test TTS only")
     parser.add_argument("--test-llm", action="store_true", help="Test LLM connection only")
     parser.add_argument("--test-all", action="store_true", help="Test both LLM and TTS")

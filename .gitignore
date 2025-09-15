@@ -54,3 +54,8 @@ node_modules/
 */ggml-small/*
 
 */vosk_models/*
+
+*/prompt_materials_*.txt
+
+readme-jingzhi.md
+
