@@ -55,4 +55,4 @@ node_modules/
 
 */vosk_models/*
 
-prompt_materials.txt
+prompt_materials_*.txt
